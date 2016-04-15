@@ -2,7 +2,7 @@
 
 #### Usage
 
-```go
+```bash
 go get -u github.com/kevin-cantwell/dotmatrix
 ```
 
