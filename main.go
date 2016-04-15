@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -20,18 +21,14 @@ const (
 	white dot = 0
 )
 
-func main2() {
-	var dots pattern
-	dots[0] = [4]dot{
-		white,
-		black,
-		white,
-		black,
-	}
-	fmt.Println(dots.String())
-}
+var (
+	luminosity = flag.Float64("lum", 50, "the percentage luminosity cutoff to determine black or white pixels")
+)
 
 func main() {
+	flag.Parse()
+	fmt.Println(*luminosity)
+
 	img, _, err := image.Decode(os.Stdin)
 	if err != nil {
 		panic(err)
@@ -70,26 +67,13 @@ func main() {
 	fmt.Println(picture)
 }
 
-// func dotAt(img image.Image, x, y int) dot {
-// 	r, g, b, a := img.At(x, y).RGBA()
-// 	fmt.Printf("(%d,%d) %d, %d, %d, %d\n", x, y, r, g, b, a)
-// 	if a < 65535 {
-// 		return black
-// 	}
-// 	if r < 65535 {
-// 		return white
-// 	}
-// 	return black
-// }
-
-// 32,767 is half bright
 func dotAt(img image.Image, x, y int) dot {
 	v := grayByLuminosity(img.At(x, y).RGBA())
-	// fmt.Printf("(%d,%d) %d, %d, %d, %d\n", x, y, r, g, b, a)
-	// fmt.Printf("(%d,%d) %d\n", x, y, v)
-	if v <= 30767 {
+	// 32,767 is half bright
+	if v <= uint32(65535/(100 / *luminosity)) {
 		return white
 	}
+
 	return black
 }
 
