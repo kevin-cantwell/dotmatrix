@@ -27,7 +27,6 @@ var (
 
 func main() {
 	flag.Parse()
-	fmt.Println(*luminosity)
 
 	img, _, err := image.Decode(os.Stdin)
 	if err != nil {
@@ -70,7 +69,7 @@ func main() {
 func dotAt(img image.Image, x, y int) dot {
 	v := grayByLuminosity(img.At(x, y).RGBA())
 	// 32,767 is half bright
-	if v <= uint32(65535/(100 / *luminosity)) {
+	if v <= uint32(65535/(100/(100-*luminosity))) {
 		return white
 	}
 
