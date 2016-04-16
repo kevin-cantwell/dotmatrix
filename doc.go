@@ -1,7 +1,7 @@
 /*
 Package dotmatrix encodes images to a "dot matrix" pattern using braille unicode characters.
 Images are first converted to monochrome, then each pixel is coded to a "dot" of a single,
-8-dot braille character. In this fashion, an images entire pixel set can be mapped, one-by-one,
+8-dot braille character. In this fashion, an image's entire pixel set can be mapped, one-by-one,
 to either a "filled" or "unfilled" braille dot. The resulting braille symbols are arranged as
 lines of text to form a textual "image" representation of the original image. The final image is
 lossy in the sense that color information is reduced to monochrome, but otherwise the resulting

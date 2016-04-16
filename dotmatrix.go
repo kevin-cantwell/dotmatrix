@@ -139,7 +139,7 @@ func (enc *ImageEncoder) Encode(img image.Image) error {
 
 func (enc *ImageEncoder) dotAt(img image.Image, x, y int) dot {
 	gray := grayscale(img.At(x, y).RGBA())
-	if gray <= float32(0xffff)*enc.luminosity {
+	if gray <= float32(0xffff)*(1.0-enc.luminosity) {
 		if enc.invert {
 			return nofill
 		}
