@@ -45,7 +45,7 @@ func main() {
 
 		img = resize.Thumbnail(uint(w), uint(img.Bounds().Dy()), img, resize.NearestNeighbor)
 
-		var opts []dotmatrix.ImageOpt
+		var opts []func(enc *dotmatrix.ImageEncoder)
 		if c.IsSet("luminosity") {
 			opt := dotmatrix.WithLuminosity(float32(c.Float64("luminosity")))
 			opts = append(opts, opt)
