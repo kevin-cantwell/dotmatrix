@@ -17,16 +17,17 @@ import (
 
 func main() {
 	app := cli.NewApp()
+	app.Version = "0.0.1"
 	app.Name = "dotmatrix"
-	app.Usage = "A command-line tool for encoding images as unicode Braille symbols."
+	app.Usage = "A command-line tool for encoding images as unicode braille symbols."
 	app.Flags = []cli.Flag{
 		cli.Float64Flag{
-			Name:  "l, luminosity",
-			Usage: "Percentage (0.00-1.00) luminosity cutoff to determine filled or nofill pixels.",
+			Name:  "luminosity,l",
+			Usage: "(Decimal) Percentage value, between 0 and 1, of luminosity. Defaults to 0.5.",
 		},
 		cli.BoolFlag{
-			Name:  "i, invert",
-			Usage: "Invert filled/nofill pixels.",
+			Name:  "invert,i",
+			Usage: "(Boolean) Inverts colors. Defaults to no inversion.",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -68,10 +69,9 @@ func exit(msg string, code int) {
 
 func GetTerminalSize() (width, height int, err error) {
 	var dimensions [4]uint16
-
 	_, _, e := syscall.Syscall6(
 		syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
+		uintptr(syscall.Stderr), // TODO: Figure out why we get "inappropriate ioctl for device" errors if we use stdin or stdout
 		uintptr(syscall.TIOCGWINSZ),
 		uintptr(unsafe.Pointer(&dimensions)),
 		0, 0, 0,
