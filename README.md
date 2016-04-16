@@ -6,6 +6,7 @@ A _very_ simple and fun package + tool for encoding images to all-braille unicod
 
 Currently only jpeg, static gif, and png is supported.
 
+[Godocs](https://godoc.org/github.com/kevin-cantwell/dotmatrix)
 
 ## Package
 
