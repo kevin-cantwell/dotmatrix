@@ -155,6 +155,10 @@ func (enc *ImageEncoder) dotAt(img image.Image, x, y int) dot {
 // Standard-ish algorithm for determining the best grayscale for human eyes
 // 0.21 R + 0.72 G + 0.07 B
 func grayscale(r, g, b, a uint32) float32 {
+	if r+g+b+a == 0 {
+		// Any purely transparent pixels should always be unfilled (white)
+		return 0xffff
+	}
 	return 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
 }
 
