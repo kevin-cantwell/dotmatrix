@@ -30,16 +30,14 @@ func encode(img image.Image, opts ...dotmatrix.ImageOpt) error
 $ go get -u github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix
 ```
 
-#### Usage
+#### Flags
 
 ```
-NAME:
-   dotmatrix - A command-line tool for encoding images as unicode braille symbols.
-GLOBAL OPTIONS:
-   --luminosity, -l "0" (Decimal) Percentage value, between 0 and 1, of luminosity. Defaults to 0.5.
-   --invert, -i         (Boolean) Inverts colors. Defaults to no inversion.
-   --help, -h           show help
-   --version, -v        print the version
+--luminosity, -l "0.5"     Percentage value, between 0 (all black) and 1 (all white). Defaults to 0.5.
+--invert, -i               Inverts colors.
+--dimensions, -d "178,51"  Comma-delimited width and height of output. The default output is constrained by the terminal size.
+--help, -h                 show help
+--version, -v              print the version
 ```
 
 #### Example

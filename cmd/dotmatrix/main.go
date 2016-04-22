@@ -1,12 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -16,34 +21,94 @@ import (
 )
 
 func main() {
+	cols, rows, err := getTerminalSize()
+	if err != nil {
+		cols, rows = 80, 25 // Small, but a pretty standard default
+	}
+
+	var dimensions *string
+
 	app := cli.NewApp()
 	app.Version = "0.0.1"
 	app.Name = "dotmatrix"
 	app.Usage = "A command-line tool for encoding images as unicode braille symbols."
+	app.UsageText = "1) dotmatrix [options] [file|url]\n   " +
+		/*         */ "2) dotmatrix [options] < [file]"
+	app.Author = "Kevin Cantwell"
+	app.Email = "kevin.cantwell@gmail.com"
 	app.Flags = []cli.Flag{
 		cli.Float64Flag{
 			Name:  "luminosity,l",
-			Usage: "(Decimal) Percentage value, between 0 and 1, of luminosity. Defaults to 0.5.",
+			Usage: "Percentage value, between 0 (all black) and 1 (all white). Defaults to 0.5.",
+			Value: 0.5,
 		},
 		cli.BoolFlag{
 			Name:  "invert,i",
-			Usage: "(Boolean) Inverts colors. Defaults to no inversion.",
+			Usage: "Inverts colors.",
+		},
+		cli.StringFlag{
+			Name:        "dimensions,d",
+			Destination: dimensions,
+			// This function achieves a specific goal: to only call getTerminalSize()
+			// if this flag is unset while allowing a pretty help output.
+			Value: func() string {
+				if dimensions == nil {
+					cols, rows, err := getTerminalSize()
+					if err != nil {
+						cols, rows = 80, 25 // Small, but a pretty standard default
+					}
+					d := fmt.Sprintf("%d,%d", cols, rows)
+					dimensions = &d
+				}
+				return *dimensions
+			}(),
+			Usage: "Comma-delimited width and height of output. The default output is constrained by the terminal size.",
 		},
 	}
 	app.Action = func(c *cli.Context) {
-		img, _, err := image.Decode(os.Stdin)
+		var reader io.Reader
+
+		// Try to parse the args, if there are any, as a file or url
+		if input := c.Args().First(); input != "" {
+			// Is it a file?
+			if file, err := os.Open(input); err == nil {
+				reader = file
+			} else {
+				// Is it a url?
+				resp, err := http.Get(input)
+				if err != nil {
+					exit(err.Error(), 1)
+				}
+				defer resp.Body.Close()
+				reader = resp.Body
+			}
+		} else {
+			reader = os.Stdin
+		}
+
+		img, _, err := image.Decode(reader)
 		if err != nil {
 			exit(err.Error(), 1)
 		}
 
-		w, _, err := GetTerminalSize()
+		// Calculate the width and height of the output image
+		cols, rows, err = parseDimensions(*dimensions)
 		if err != nil {
 			exit(err.Error(), 1)
 		}
+		// Multiply by 2 since each braille symbol is 2 pixels wide
+		width := cols * 2
+		// Multiply by 4 since each braille symbol is 4 pixels high
+		height := (rows - 1) * 4
 
-		w = w * 2 // Since each symbol is two dots wide
-
-		img = resize.Thumbnail(uint(w), uint(img.Bounds().Dy()), img, resize.NearestNeighbor)
+		// Resize to fit
+		if width == 0 {
+			width = img.Bounds().Dx()
+		}
+		if height == 0 {
+			height = img.Bounds().Dy()
+		}
+		img = resize.Thumbnail(uint(width), uint(height), img, resize.NearestNeighbor)
 
 		var opts []func(enc *dotmatrix.ImageEncoder)
 		if c.IsSet("luminosity") {
@@ -59,7 +124,10 @@ func main() {
 			exit(err.Error(), 1)
 		}
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
 func exit(msg string, code int) {
@@ -67,7 +135,23 @@ func exit(msg string, code int) {
 	os.Exit(code)
 }
 
-func GetTerminalSize() (width, height int, err error) {
+func parseDimensions(dim string) (int, int, error) {
+	parts := strings.Split(dim, ",")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("dotmatrix: dimensions must be of the form \"W,H\"")
+	}
+	w, err := strconv.Atoi(strings.Trim(parts[0], " "))
+	if err != nil {
+		return 0, 0, err
+	}
+	h, err := strconv.Atoi(strings.Trim(parts[1], " "))
+	if err != nil {
+		return 0, 0, err
+	}
+	return w, h, nil
+}
+
+func getTerminalSize() (width, height int, err error) {
 	var dimensions [4]uint16
 	_, _, e := syscall.Syscall6(
 		syscall.SYS_IOCTL,
