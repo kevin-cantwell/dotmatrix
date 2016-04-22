@@ -5,11 +5,9 @@ import (
 	"io"
 )
 
-type dot int
-
 const (
-	filled dot = 1
-	nofill dot = 0
+	black = 1
+	white = 0
 )
 
 // WithLuminosity is a functional option for NewImageEncoder that sets the
@@ -109,10 +107,10 @@ func (enc *ImageEncoder) Encode(img image.Image) error {
 
 	// An image's bounds do not necessarily start at (0, 0), so the two loops start
 	// at bounds.Min.Y and bounds.Min.X. Looping over Y first and X second is more
-	// likely to result in better memory access patterns than X first and Y second.
+	// likely to result in better memory access brailles than X first and Y second.
 	for py := bounds.Min.Y; py < bounds.Max.Y; py += 4 {
 		for px := bounds.Min.X; px < bounds.Max.X; px += 2 {
-			var dots pattern
+			var dots braille
 			// Draw left-right, top-bottom.
 			for y := 0; y < 4; y++ {
 				for x := 0; x < 2; x++ {
@@ -120,7 +118,7 @@ func (enc *ImageEncoder) Encode(img image.Image) error {
 					// pixels to the right or bottom of the image. In those
 					// cases we just don't fill the dots.
 					if px+x >= bounds.Max.X || py+y >= bounds.Max.Y {
-						dots[x][y] = nofill
+						dots[x][y] = white
 						continue
 					}
 					dots[x][y] = enc.dotAt(img, px+x, py+y)
@@ -137,26 +135,26 @@ func (enc *ImageEncoder) Encode(img image.Image) error {
 	return nil
 }
 
-func (enc *ImageEncoder) dotAt(img image.Image, x, y int) dot {
+func (enc *ImageEncoder) dotAt(img image.Image, x, y int) int {
 	gray := grayscale(img.At(x, y).RGBA())
 	if gray <= float32(0xffff)*(1.0-enc.luminosity) {
 		if enc.invert {
-			return nofill
+			return white
 		}
-		return filled
+		return black
 	}
 
 	if enc.invert {
-		return filled
+		return black
 	}
-	return nofill
+	return white
 }
 
 // Standard-ish algorithm for determining the best grayscale for human eyes
 // 0.21 R + 0.72 G + 0.07 B
 func grayscale(r, g, b, a uint32) float32 {
-	if r+g+b+a == 0 {
-		// Any purely transparent pixels should always be unfilled (white)
+	if a == 0 {
+		// Any purely transparent pixels should always be unblack (white)
 		return 0xffff
 	}
 	return 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
@@ -169,9 +167,9 @@ func grayscale(r, g, b, a uint32) float32 {
 // |(0,2)(1,2)|
 // |(0,3)(1,3)|
 // +----------+
-type pattern [2][4]dot
+type braille [2][4]int
 
-// CodePoint maps each point in pattern to a braille number and
+// codePoint maps each point in braille to a dot identifier and
 // calculates the corresponding unicode symbol.
 // +------+
 // |(1)(4)|
@@ -180,8 +178,8 @@ type pattern [2][4]dot
 // |(7)(8)|
 // +------+
 // See https://en.wikipedia.org/wiki/Braille_Patterns#Identifying.2C_naming_and_ordering)
-func (dots pattern) CodePoint() rune {
-	lowEndian := [8]dot{dots[0][0], dots[0][1], dots[0][2], dots[1][0], dots[1][1], dots[1][2], dots[0][3], dots[1][3]}
+func (dots braille) codePoint() rune {
+	lowEndian := [8]int{dots[0][0], dots[0][1], dots[0][2], dots[1][0], dots[1][1], dots[1][2], dots[0][3], dots[1][3]}
 	var v int
 	for i, x := range lowEndian {
 		v += int(x) << uint(i)
@@ -189,6 +187,6 @@ func (dots pattern) CodePoint() rune {
 	return rune(v) + '\u2800'
 }
 
-func (dots pattern) String() string {
-	return string(dots.CodePoint())
+func (dots braille) String() string {
+	return string(dots.codePoint())
 }
