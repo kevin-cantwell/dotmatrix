@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	_ "image/gif"
+	"image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
@@ -32,8 +32,8 @@ func main() {
 	app.Version = "0.0.1"
 	app.Name = "dotmatrix"
 	app.Usage = "A command-line tool for encoding images as unicode braille symbols."
-	app.UsageText = "1) dotmatrix [options] [file|url]\n   " +
-		/*         */ "2) dotmatrix [options] < [file]"
+	app.UsageText = "1) dotmatrix [options] [file|url]\n" +
+		/*      */ "   2) dotmatrix [options] < [file]"
 	app.Author = "Kevin Cantwell"
 	app.Email = "kevin.cantwell@gmail.com"
 	app.Flags = []cli.Flag{
@@ -64,6 +64,10 @@ func main() {
 			}(),
 			Usage: "Comma-delimited width and height of output. The default output is constrained by the terminal size.",
 		},
+		cli.BoolFlag{
+			Name:  "play,p",
+			Usage: "Animates gifs in a pseudo-graphical user interface (ESC or CTRL-C to quit).",
+		},
 	}
 	app.Action = func(c *cli.Context) {
 		var reader io.Reader
@@ -84,6 +88,23 @@ func main() {
 			}
 		} else {
 			reader = os.Stdin
+		}
+
+		config := dotmatrix.Config{
+			Luminosity: float32(c.Float64("luminosity")),
+			Inverted:   c.Bool("invert"),
+		}
+
+		if c.Bool("play") {
+			giff, err := gif.DecodeAll(reader)
+			if err != nil {
+				exit(err.Error(), 1)
+			}
+			enc := dotmatrix.NewGIFEncoder(config)
+			if err := enc.Encode(os.Stdout, giff); err != nil {
+				exit(err.Error(), 1)
+			}
+			return
 		}
 
 		img, _, err := image.Decode(reader)
@@ -110,17 +131,8 @@ func main() {
 		}
 		img = resize.Thumbnail(uint(width), uint(height), img, resize.NearestNeighbor)
 
-		var opts []func(enc *dotmatrix.ImageEncoder)
-		if c.IsSet("luminosity") {
-			opt := dotmatrix.WithLuminosity(float32(c.Float64("luminosity")))
-			opts = append(opts, opt)
-		}
-		if c.IsSet("invert") {
-			opt := dotmatrix.WithInvertedColors()
-			opts = append(opts, opt)
-		}
-		enc := dotmatrix.NewImageEncoder(os.Stdout, opts...)
-		if err := enc.Encode(img); err != nil {
+		enc := dotmatrix.NewImageEncoder(config)
+		if err := enc.Encode(os.Stdout, img); err != nil {
 			exit(err.Error(), 1)
 		}
 	}

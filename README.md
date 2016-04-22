@@ -2,7 +2,7 @@
 
 # Dot Matrix
 
-A _very_ simple and fun package + tool for encoding images to all-braille unicode representations. It can be used as a standalone command-line utility or as a package.
+A simple and fun package & command-line utility for encoding images to all-braille unicode representations. It can be used as a standalone command-line utility or as a package.
 
 Currently only jpeg, static gif, and png types are supported.
 

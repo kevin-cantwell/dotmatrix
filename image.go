@@ -2,33 +2,101 @@ package dotmatrix
 
 import (
 	"image"
+	"image/color"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 )
 
 const (
-	black = 1
-	white = 0
+	black       mono = 1
+	white       mono = 0
+	transparent mono = -1
 )
 
-// WithLuminosity is a functional option for NewImageEncoder that sets the
-// luminosity percentage. The value for lum should be between 0 and 1.
-//
-// For more about functional options, see:
-// http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
-func WithLuminosity(lum float32) func(enc *ImageEncoder) {
-	return func(enc *ImageEncoder) {
-		enc.luminosity = lum
+var (
+	DefaultConfig = Config{Luminosity: 0.5, Inverted: false}
+)
+
+type Config struct {
+	Luminosity float32
+	Inverted   bool
+}
+
+type Image struct {
+	model  colorModel
+	bounds image.Rectangle
+	pixels []color.Color
+	stride int
+}
+
+// ColorModel returns the Image's color model.
+func (img *Image) ColorModel() color.Model {
+	return img.model
+}
+
+// Bounds returns the domain for which At can return non-zero color.
+// The bounds do not necessarily contain the point (0, 0).
+func (img *Image) Bounds() image.Rectangle {
+	return img.bounds
+}
+
+// At returns the color of the pixel at (x, y).
+// At(Bounds().Min.X, Bounds().Min.Y) returns the upper-left pixel of the grid.
+// At(Bounds().Max.X-1, Bounds().Max.Y-1) returns the lower-right one.
+func (img *Image) At(x, y int) color.Color {
+	return img.at(x, y)
+}
+
+func (img *Image) at(x, y int) mono {
+	x = x - img.bounds.Min.X
+	y = y - img.bounds.Min.Y
+	i := y*img.stride + x
+	if i < len(img.pixels) {
+		return img.pixels[i].(mono)
+	}
+	return transparent
+}
+
+type colorModel struct {
+	luminosity float32
+	inverted   bool
+}
+
+func (m colorModel) Convert(c color.Color) color.Color {
+	r, g, b, a := c.RGBA()
+	if a == 0 {
+		return transparent
+	}
+	gray := 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
+	isWhite := float32(0xffff)*(1-m.luminosity) < gray
+	if isWhite {
+		if !m.inverted {
+			return white
+		} else {
+			return black
+		}
+	}
+	if !m.inverted {
+		return black
+	} else {
+		return white
 	}
 }
 
-// WithInvertedColors is a functional option for NewImageEncoder that causes
-// colors to be inverted.
-//
-// For more about functional options, see:
-// http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
-func WithInvertedColors() func(enc *ImageEncoder) {
-	return func(enc *ImageEncoder) {
-		enc.invert = true
+type mono int
+
+func (c mono) RGBA() (r, g, b, a uint32) {
+	switch c {
+	case black:
+		return 0, 0, 0, 0xffff
+	case white:
+		return 0xffff, 0xffff, 0xffff, 0xffff
+	case transparent:
+		return 0, 0, 0, 0
+	default:
+		panic("dotmatrix: unknown color value")
 	}
 }
 
@@ -36,15 +104,20 @@ func WithInvertedColors() func(enc *ImageEncoder) {
 // unicode characters. Braille symbols are useful for representing monochrome images
 // because any rectangle of 2 by 8 pixels can be represented by one of unicode's
 // 256 braille symbols:
-//   ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
+//   ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟
+//  ⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿
+//  ⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟
+//  ⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿
+//  ⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟
+//  ⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿
+//  ⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟
+//  ⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
+//
 // ImageEncoder is not safe for concurrent use.
 //
 // See: https://en.wikipedia.org/wiki/Braille_Patterns
 type ImageEncoder struct {
-	// writer to which we write the braille representation of the image.
-	writer     io.Writer // Output
-	luminosity float32   // Percentage
-	invert     bool      // Invert colors
+	config Config
 }
 
 // NewImageEncoder configures and returns an ImageEncoder. If no options are passed, a default
@@ -52,16 +125,10 @@ type ImageEncoder struct {
 //
 // For more about functional options, see:
 // http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
-func NewImageEncoder(w io.Writer, opts ...func(enc *ImageEncoder)) *ImageEncoder {
-	enc := ImageEncoder{
-		writer:     w,
-		luminosity: 0.5,
-		invert:     false,
+func NewImageEncoder(config Config) *ImageEncoder {
+	return &ImageEncoder{
+		config: config,
 	}
-	for _, opt := range opts {
-		opt(&enc)
-	}
-	return &enc
 }
 
 // Encodes the image as a series of braille and line feed characters and writes
@@ -102,91 +169,90 @@ func NewImageEncoder(w io.Writer, opts ...func(enc *ImageEncoder)) *ImageEncoder
 //   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 //   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 //   ⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
-func (enc *ImageEncoder) Encode(img image.Image) error {
+func (enc *ImageEncoder) Encode(w io.Writer, input image.Image) error {
+	img := convert(input, enc.config)
 	bounds := img.Bounds()
 
 	// An image's bounds do not necessarily start at (0, 0), so the two loops start
-	// at bounds.Min.Y and bounds.Min.X. Looping over Y first and X second is more
-	// likely to result in better memory access brailles than X first and Y second.
+	// at bounds.Min.Y and bounds.Min.X.
+	// Looping over Y first and X second is more likely to result in better memory
+	// access patterns than X first and Y second.
 	for py := bounds.Min.Y; py < bounds.Max.Y; py += 4 {
 		for px := bounds.Min.X; px < bounds.Max.X; px += 2 {
-			var dots braille
+			var b braille
 			// Draw left-right, top-bottom.
 			for y := 0; y < 4; y++ {
 				for x := 0; x < 2; x++ {
-					// Braille symbols are 2x8, which may end up adding
-					// pixels to the right or bottom of the image. In those
-					// cases we just don't fill the dots.
-					if px+x >= bounds.Max.X || py+y >= bounds.Max.Y {
-						dots[x][y] = white
-						continue
+					// The color model will handle black/white inversion, however
+					// transparent pixels need to be drawn as black if inversion is set.
+					clr := img.at(px+x, py+y)
+					if clr == black || (clr == transparent && enc.config.Inverted) {
+						b[x][y] = 1
 					}
-					dots[x][y] = enc.dotAt(img, px+x, py+y)
 				}
 			}
-			if _, err := enc.writer.Write([]byte(dots.String())); err != nil {
+			if _, err := w.Write([]byte(b.String())); err != nil {
 				return err
 			}
 		}
-		if _, err := enc.writer.Write([]byte{'\n'}); err != nil {
+		if _, err := w.Write([]byte{'\n'}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (enc *ImageEncoder) dotAt(img image.Image, x, y int) int {
-	gray := grayscale(img.At(x, y).RGBA())
-	if gray <= float32(0xffff)*(1.0-enc.luminosity) {
-		if enc.invert {
-			return white
+type ImageDecoder struct {
+	config Config
+}
+
+func NewImageDecoder(config Config) *ImageDecoder {
+	return &ImageDecoder{
+		config: config,
+	}
+}
+
+func (dec *ImageDecoder) Decode(r io.Reader) (image.Image, error) {
+	img, _, err := image.Decode(r)
+	if err != nil {
+		return nil, err
+	}
+	return convert(img, dec.config), nil
+}
+
+func Decode(r io.Reader) (image.Image, error) {
+	dec := NewImageDecoder(DefaultConfig)
+	return dec.Decode(r)
+}
+
+func convert(img image.Image, config Config) *Image {
+	if casted, ok := img.(*Image); ok {
+		return casted
+	}
+
+	bounds := img.Bounds()
+	converted := Image{
+		bounds: bounds,
+		pixels: make([]color.Color, bounds.Dx()*bounds.Dy()),
+		stride: bounds.Dx(),
+		model: colorModel{
+			luminosity: config.Luminosity,
+			inverted:   config.Inverted,
+		},
+	}
+
+	var i int
+
+	// An image's bounds do not necessarily start at (0, 0), so the two loops start
+	// at bounds.Min.Y and bounds.Min.X.
+	// Looping over Y first and X second is more likely to result in better memory
+	// access patterns than X first and Y second.
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			converted.pixels[i] = converted.model.Convert(img.At(x, y))
+			i++
 		}
-		return black
 	}
 
-	if enc.invert {
-		return black
-	}
-	return white
-}
-
-// Standard-ish algorithm for determining the best grayscale for human eyes
-// 0.21 R + 0.72 G + 0.07 B
-func grayscale(r, g, b, a uint32) float32 {
-	if a == 0 {
-		// Any purely transparent pixels should always be unblack (white)
-		return 0xffff
-	}
-	return 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
-}
-
-// Represents an 8 dot braille pattern using x,y coordinates. Eg:
-// +----------+
-// |(0,0)(1,0)|
-// |(0,1)(1,1)|
-// |(0,2)(1,2)|
-// |(0,3)(1,3)|
-// +----------+
-type braille [2][4]int
-
-// codePoint maps each point in braille to a dot identifier and
-// calculates the corresponding unicode symbol.
-// +------+
-// |(1)(4)|
-// |(2)(5)|
-// |(3)(6)|
-// |(7)(8)|
-// +------+
-// See https://en.wikipedia.org/wiki/Braille_Patterns#Identifying.2C_naming_and_ordering)
-func (dots braille) codePoint() rune {
-	lowEndian := [8]int{dots[0][0], dots[0][1], dots[0][2], dots[1][0], dots[1][1], dots[1][2], dots[0][3], dots[1][3]}
-	var v int
-	for i, x := range lowEndian {
-		v += int(x) << uint(i)
-	}
-	return rune(v) + '\u2800'
-}
-
-func (dots braille) String() string {
-	return string(dots.codePoint())
+	return &converted
 }
