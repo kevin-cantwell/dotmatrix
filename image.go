@@ -15,19 +15,10 @@ const (
 	transparent mono = -1
 )
 
-var (
-	DefaultConfig = Config{Luminosity: 0.5, Inverted: false}
-)
-
-type Config struct {
-	Luminosity float32
-	Inverted   bool
-}
-
 type Image struct {
 	model  colorModel
 	bounds image.Rectangle
-	pixels []color.Color
+	pixels []mono
 	stride int
 }
 
@@ -54,14 +45,12 @@ func (img *Image) at(x, y int) mono {
 	y = y - img.bounds.Min.Y
 	i := y*img.stride + x
 	if i < len(img.pixels) {
-		return img.pixels[i].(mono)
+		return img.pixels[i]
 	}
 	return transparent
 }
 
 type colorModel struct {
-	luminosity float32
-	inverted   bool
 }
 
 func (m colorModel) Convert(c color.Color) color.Color {
@@ -70,18 +59,10 @@ func (m colorModel) Convert(c color.Color) color.Color {
 		return transparent
 	}
 	gray := 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
-	isWhite := float32(0xffff)*(1-m.luminosity) < gray
-	if isWhite {
-		if !m.inverted {
-			return white
-		} else {
-			return black
-		}
-	}
-	if !m.inverted {
-		return black
-	} else {
+	if float32(0xffff)*(0.5) < gray {
 		return white
+	} else {
+		return black
 	}
 }
 
@@ -100,8 +81,8 @@ func (c mono) RGBA() (r, g, b, a uint32) {
 	}
 }
 
-// ImageEncoder encodes an image as a series of braille and line feed (newline)
-// unicode characters. Braille symbols are useful for representing monochrome images
+// Encode encodes the image as a series of braille and line feed characters and writes
+// to w. Braille symbols are useful for representing monochrome images
 // because any rectangle of 2 by 8 pixels can be represented by one of unicode's
 // 256 braille symbols:
 //   ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟
@@ -113,27 +94,9 @@ func (c mono) RGBA() (r, g, b, a uint32) {
 //  ⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟
 //  ⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
 //
-// ImageEncoder is not safe for concurrent use.
-//
 // See: https://en.wikipedia.org/wiki/Braille_Patterns
-type ImageEncoder struct {
-	config Config
-}
-
-// NewImageEncoder configures and returns an ImageEncoder. If no options are passed, a default
-// luminosity of 50% is used and colors remain un-inverted.
 //
-// For more about functional options, see:
-// http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
-func NewImageEncoder(config Config) *ImageEncoder {
-	return &ImageEncoder{
-		config: config,
-	}
-}
-
-// Encodes the image as a series of braille and line feed characters and writes
-// to ImageEncoder's internal writer. Each pixel of the image is converted to
-// either black or white by:
+// Each pixel of the image is converted to either black or white by:
 //
 // 1) Calculating the grayscale value according to the following algorithm:
 // 0.21 R + 0.72 G + 0.07 B; then
@@ -169,9 +132,9 @@ func NewImageEncoder(config Config) *ImageEncoder {
 //   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 //   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 //   ⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
-func (enc *ImageEncoder) Encode(w io.Writer, input image.Image) error {
-	img := convert(input, enc.config)
-	bounds := img.Bounds()
+func Encode(w io.Writer, img image.Image) error {
+	converted := convert(img)
+	bounds := converted.Bounds()
 
 	// An image's bounds do not necessarily start at (0, 0), so the two loops start
 	// at bounds.Min.Y and bounds.Min.X.
@@ -185,8 +148,8 @@ func (enc *ImageEncoder) Encode(w io.Writer, input image.Image) error {
 				for x := 0; x < 2; x++ {
 					// The color model will handle black/white inversion, however
 					// transparent pixels need to be drawn as black if inversion is set.
-					clr := img.at(px+x, py+y)
-					if clr == black || (clr == transparent && enc.config.Inverted) {
+					clr := converted.at(px+x, py+y)
+					if clr == black {
 						b[x][y] = 1
 					}
 				}
@@ -202,30 +165,15 @@ func (enc *ImageEncoder) Encode(w io.Writer, input image.Image) error {
 	return nil
 }
 
-type ImageDecoder struct {
-	config Config
-}
-
-func NewImageDecoder(config Config) *ImageDecoder {
-	return &ImageDecoder{
-		config: config,
-	}
-}
-
-func (dec *ImageDecoder) Decode(r io.Reader) (image.Image, error) {
+func Decode(r io.Reader) (image.Image, error) {
 	img, _, err := image.Decode(r)
 	if err != nil {
 		return nil, err
 	}
-	return convert(img, dec.config), nil
+	return convert(img), nil
 }
 
-func Decode(r io.Reader) (image.Image, error) {
-	dec := NewImageDecoder(DefaultConfig)
-	return dec.Decode(r)
-}
-
-func convert(img image.Image, config Config) *Image {
+func convert(img image.Image) *Image {
 	if casted, ok := img.(*Image); ok {
 		return casted
 	}
@@ -233,12 +181,9 @@ func convert(img image.Image, config Config) *Image {
 	bounds := img.Bounds()
 	converted := Image{
 		bounds: bounds,
-		pixels: make([]color.Color, bounds.Dx()*bounds.Dy()),
+		pixels: make([]mono, bounds.Dx()*bounds.Dy()),
 		stride: bounds.Dx(),
-		model: colorModel{
-			luminosity: config.Luminosity,
-			inverted:   config.Inverted,
-		},
+		model:  colorModel{},
 	}
 
 	var i int
@@ -249,7 +194,7 @@ func convert(img image.Image, config Config) *Image {
 	// access patterns than X first and Y second.
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			converted.pixels[i] = converted.model.Convert(img.At(x, y))
+			converted.pixels[i] = converted.model.Convert(img.At(x, y)).(mono)
 			i++
 		}
 	}

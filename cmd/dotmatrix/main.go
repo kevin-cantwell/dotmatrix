@@ -1,9 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	_ "image/jpeg"
@@ -19,11 +19,12 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/disintegration/imaging"
 	"github.com/kevin-cantwell/dotmatrix"
+	"github.com/nfnt/resize"
 )
 
 func main() {
 	app := cli.NewApp()
-	app.Version = "0.0.1"
+	app.Version = "0.0.2"
 	app.Name = "dotmatrix"
 	app.Usage = "A command-line tool for encoding images as unicode braille symbols."
 	app.UsageText = "1) dotmatrix [options] [file|url]\n" +
@@ -72,7 +73,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "play,p",
-			Usage: "Animates gifs in a pseudo-graphical user interface (ESC or CTRL-C to quit).",
+			Usage: "EXPERIMENTAL! Animates gifs in the terminal. ESC or CTRL-C to quit.",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -102,20 +103,7 @@ func main() {
 			if err != nil {
 				exit(err.Error(), 1)
 			}
-			for i, frame := range giff.Image {
-				processed := preprocessImage(c, frame)
-				paletted := image.NewPaletted(processed.Bounds(), frame.Palette)
-				scale := float32(processed.Bounds().Dx()) / float32(frame.Bounds().Dx())
-				x := float32(frame.Bounds().Min.X) * scale
-				y := float32(frame.Bounds().Min.Y) * scale
-				draw.Draw(paletted, processed.Bounds(), processed, image.Pt(int(x), int(y)), draw.Src)
-				// imaging.Overlay(paletted, processed, frame.Bounds().Min, 1.0)
-				giff.Image[i] = paletted
-			}
-			// player := dotmatrix.NewGIFPlayer(config)
-			if err := dotmatrix.PlayGIF(os.Stdout, giff); err != nil {
-				exit(err.Error(), 1)
-			}
+			playGIF(c, giff, scalar(c, giff.Image[0]))
 			return
 		}
 
@@ -126,10 +114,9 @@ func main() {
 		}
 
 		// Preproces the image
-		img = preprocessImage(c, img)
+		img = preprocessImage(c, img, scalar(c, img))
 
-		// enc := dotmatrix.NewImageEncoder()
-		if err := dotmatrix.EncodeImage(os.Stdout, img); err != nil {
+		if err := dotmatrix.Encode(os.Stdout, img); err != nil {
 			exit(err.Error(), 1)
 		}
 	}
@@ -139,10 +126,26 @@ func main() {
 	}
 }
 
-func preprocessImage(c *cli.Context, img image.Image) image.Image {
+func playGIF(c *cli.Context, giff *gif.GIF, scale float32) {
+	giff.Config = image.Config{
+		Width:  int(float32(giff.Config.Width) * scale),
+		Height: int(float32(giff.Config.Height) * scale),
+	}
+	for i, frame := range giff.Image {
+		giff.Image[i] = preprocessImage(c, frame, scale)
+	}
+	if err := dotmatrix.PlayGIF(os.Stdout, giff); err != nil {
+		exit(err.Error(), 1)
+	}
+}
+
+func scalar(c *cli.Context, img image.Image) float32 {
 	var cols, lines int
 	if c.IsSet("fit") {
 		parts := strings.Split(c.String("fit"), ",")
+		if len(parts) != 2 {
+			exit("fit option must be comma separated", 1)
+		}
 		cols, _ = strconv.Atoi(strings.Trim(parts[0], " "))
 		lines, _ = strconv.Atoi(strings.Trim(parts[1], " "))
 	}
@@ -152,20 +155,36 @@ func preprocessImage(c *cli.Context, img image.Image) image.Image {
 		if err != nil {
 			cols, lines = 80, 25 // Small, but a pretty standard default
 		}
-	} else {
-		if cols == 0 {
-			cols = 800 // Something huge
-		}
-		if lines == 0 {
-			lines = 250 // Something huge
-		}
 	}
+
+	var scalar float32
+
 	// Multiply cols by 2 since each braille symbol is 2 pixels wide
 	// Multiply lines by 4 since each braille symbol is 4 pixels high
-	width, height := cols*2, (lines-1)*4
-	if width < img.Bounds().Dx() || height < img.Bounds().Dy() {
-		img = imaging.Fit(img, width, height, imaging.NearestNeighbor)
+	width, height := float32(cols*2), float32((lines-1)*4)
+	scalarX, scalarY := width/float32(img.Bounds().Dx()), height/float32(img.Bounds().Dy())
+	if scalarX == 0 {
+		scalar = scalarY
 	}
+	if scalarY == 0 {
+		scalar = scalarX
+	}
+	if scalarX < scalarY {
+		scalar = scalarX
+	} else {
+		scalar = scalarY
+	}
+	if scalar > 1.0 {
+		return 1.0
+	}
+	return scalar
+}
+
+func preprocessImage(c *cli.Context, img image.Image, scale float32) *image.Paletted {
+	orig := img // Save off since image adjustment resets bounds min to ZP
+
+	width, height := uint(float32(img.Bounds().Dx())*scale), uint(float32(img.Bounds().Dy())*scale)
+	img = resize.Thumbnail(width, height, img, resize.NearestNeighbor)
 
 	if c.IsSet("gamma") {
 		img = imaging.AdjustGamma(img, c.Float64("gamma"))
@@ -185,22 +204,24 @@ func preprocessImage(c *cli.Context, img image.Image) image.Image {
 	if c.Bool("invert") {
 		img = imaging.Invert(img)
 	}
-	return img
+
+	// Create a new paletted image using a monochrome+transparent color palette.
+	paletted := image.NewPaletted(img.Bounds(), []color.Color{color.Black, color.White, color.Transparent})
+	// If an image adjustment has occurred, we must redefine the bounds so that
+	// we maintain the starting point. Not all images start at (0,0) after all.
+	if orig != img {
+		offset := image.Pt(int(float32(orig.Bounds().Min.X)*scale), int(float32(orig.Bounds().Min.Y)*scale))
+		paletted.Rect = paletted.Bounds().Add(offset)
+	}
+	// Redraw the image with floyd steinberg image diffusion. This
+	// allows us to simulate gray or shaded regions with monochrome.
+	draw.FloydSteinberg.Draw(paletted, paletted.Bounds(), img, img.Bounds().Min)
+	return paletted
 }
 
 func exit(msg string, code int) {
 	fmt.Println(msg)
 	os.Exit(code)
-}
-
-func parseDimensions(dim string) (int, int, error) {
-	parts := strings.Split(dim, ",")
-	if len(parts) != 2 {
-		return 0, 0, errors.New("dotmatrix: dimensions must be of the form \"W,H\"")
-	}
-	w, _ := strconv.Atoi(strings.Trim(parts[0], " "))
-	h, _ := strconv.Atoi(strings.Trim(parts[1], " "))
-	return w, h, nil
 }
 
 func getTerminalSize() (width, height int, err error) {
