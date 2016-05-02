@@ -1,10 +1,12 @@
+![image](https://cloud.githubusercontent.com/assets/307864/14945003/a928affe-0fd3-11e6-9725-ae6824be4317.png)![image](https://cloud.githubusercontent.com/assets/307864/14945005/c9b0d53a-0fd3-11e6-9b06-841eb637a2a0.png)
+************image input************* *********terminal output***********
+
+
 Dotmatrix is a simple and fun package & command-line utility for encoding images to all-braille unicode representations. It can be used as a standalone command-line utility or as a package. Currently jpeg, gif, png, and bmp types are supported. 
 
 Animated gif support is experimental, but awesome ;)
 NOTE: Some terminals, such as iTerm2, have a poor refresh rate when playing animated gifs. This cannot be helped. The default terminal on OSX is quite speedy though.
 
-![image](https://cloud.githubusercontent.com/assets/307864/14945003/a928affe-0fd3-11e6-9725-ae6824be4317.png)![image](https://cloud.githubusercontent.com/assets/307864/14945005/c9b0d53a-0fd3-11e6-9b06-841eb637a2a0.png)
-************image input************* *********terminal output***********
 
 [Godocs](https://godoc.org/github.com/kevin-cantwell/dotmatrix)
 
@@ -131,7 +133,7 @@ $ dotmatrix --sharpen 100 < face.jpg
 
 ## Internals
 
-The input image is decoded from stdin and, in the case of the command-line utility, resized to fit the terminal width. Each pixel is mapped to a matrix of braille unicode points and the braille symbols are written to stdout in such a way as they appear to reconstruct the image, pixel-for-pixel. Each pixel is mapped to a monochrome color (black or white) depending on a fairly standard RGB luminosity algorithm.
+The input image is decoded and treated with Floyd Steinberg image diffusion in order to capture gray tones in monochrome. Each pixel is then mapped to a matrix of braille unicode points and the braille symbols are written to stdout in such a way as they appear to reconstruct the image, pixel-for-pixel. Each pixel is mapped to a monochrome color (black or white) depending on a fairly standard RGB luminosity algorithm.
 
 The command-line utility determines the resolution of the output based on the number of columns in the current terminal, so if you make your terminal wider you may get a higher-resolution picture.
 

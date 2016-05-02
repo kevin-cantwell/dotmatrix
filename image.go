@@ -3,135 +3,95 @@ package dotmatrix
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+
+	_ "golang.org/x/image/bmp"
 )
 
-const (
-	black       mono = 1
-	white       mono = 0
-	transparent mono = -1
-)
+// Braille epresents an 8 dot braille pattern in x,y coordinates space. Eg:
+//   +----------+
+//   |(0,0)(1,0)|
+//   |(0,1)(1,1)|
+//   |(0,2)(1,2)|
+//   |(0,3)(1,3)|
+//   +----------+
+type braille [2][4]int
 
-type Image struct {
-	model  colorModel
-	bounds image.Rectangle
-	pixels []mono
-	stride int
-}
-
-// ColorModel returns the Image's color model.
-func (img *Image) ColorModel() color.Model {
-	return img.model
-}
-
-// Bounds returns the domain for which At can return non-zero color.
-// The bounds do not necessarily contain the point (0, 0).
-func (img *Image) Bounds() image.Rectangle {
-	return img.bounds
-}
-
-// At returns the color of the pixel at (x, y).
-// At(Bounds().Min.X, Bounds().Min.Y) returns the upper-left pixel of the grid.
-// At(Bounds().Max.X-1, Bounds().Max.Y-1) returns the lower-right one.
-func (img *Image) At(x, y int) color.Color {
-	return img.at(x, y)
-}
-
-func (img *Image) at(x, y int) mono {
-	x = x - img.bounds.Min.X
-	y = y - img.bounds.Min.Y
-	i := y*img.stride + x
-	if i < len(img.pixels) {
-		return img.pixels[i]
+// codePoint maps each point in braille to a dot identifier and
+// calculates the corresponding unicode symbol.
+//   +------+
+//   |(1)(4)|
+//   |(2)(5)|
+//   |(3)(6)|
+//   |(7)(8)|
+//   +------+
+// See https://en.wikipedia.org/wiki/Braille_Patterns#Identifying.2C_naming_and_ordering)
+func (b braille) codePoint() rune {
+	lowEndian := [8]int{b[0][0], b[0][1], b[0][2], b[1][0], b[1][1], b[1][2], b[0][3], b[1][3]}
+	var v int
+	for i, x := range lowEndian {
+		v += int(x) << uint(i)
 	}
-	return transparent
+	return rune(v) + '\u2800'
 }
 
-type colorModel struct {
+// String returns a unicode braille character. One of:
+//  ⣿ ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾
+func (b braille) String() string {
+	return string(b.codePoint())
 }
 
-func (m colorModel) Convert(c color.Color) color.Color {
-	r, g, b, a := c.RGBA()
-	if a == 0 {
-		return transparent
-	}
-	gray := 0.21*float32(r) + 0.72*float32(g) + 0.07*float32(b)
-	if float32(0xffff)*(0.5) < gray {
-		return white
-	} else {
-		return black
-	}
-}
+/*
+Encode encodes the image as a series of braille and line feed characters and writes
+to w. Braille symbols are useful for representing monochrome images
+because any rectangle of 2 by 8 pixels can be represented by one of unicode's
+256 braille symbols (See: https:  en.wikipedia.org/wiki/Braille_Patterns):
+	 ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟
+	⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿
+	⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟
+	⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿
+	⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟
+	⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿
+	⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟
+	⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
 
-type mono int
+Each pixel of the image is converted to either black or white by redrawing the
+image using Floyd Steinberg diffusion and a 3-color palette of black, white,
+and transparent. Then each 2x4 pixel block is written to w as a braille symbol.
 
-func (c mono) RGBA() (r, g, b, a uint32) {
-	switch c {
-	case black:
-		return 0, 0, 0, 0xffff
-	case white:
-		return 0xffff, 0xffff, 0xffff, 0xffff
-	case transparent:
-		return 0, 0, 0, 0
-	default:
-		panic("dotmatrix: unknown color value")
-	}
-}
-
-// Encode encodes the image as a series of braille and line feed characters and writes
-// to w. Braille symbols are useful for representing monochrome images
-// because any rectangle of 2 by 8 pixels can be represented by one of unicode's
-// 256 braille symbols:
-//   ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟
-//  ⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿
-//  ⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟
-//  ⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿
-//  ⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟
-//  ⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿
-//  ⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟
-//  ⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
-//
-// See: https://en.wikipedia.org/wiki/Braille_Patterns
-//
-// Each pixel of the image is converted to either black or white by:
-//
-// 1) Calculating the grayscale value according to the following algorithm:
-// 0.21 R + 0.72 G + 0.07 B; then
-//
-// 2) Choosing black or white by comparing it to the luminosity option (which
-// itself defaults to 50% if left unset).
-//
-// A sample encoding of an 134px by 107px image of Saturn looks like:
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠛⠋⠉⠁⠀⠀⠀⠂⠩⡻⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠋⢉⣀⠤⠤⠒⠒⠒⠒⠲⣶⣄⠀⠀⠁⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠟⢉⡠⠄⠒⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⢢⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⠿⠿⠿⠟⢋⡡⠔⠊⠁⠀⠀⣀⣀⣠⣤⣄⣀⠀⠀⠀⠀⠀⢀⡏⠀⢠⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣾⠿⠛⠁⠄⠊⠁⠀⠀⢤⣴⣾⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⢀⡞⠀⣠⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⢠⠊⢀⣼⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣿⡿⠁⠀⢀⡔⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⠏⠀⠀⡠⠊⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⡡⠐⠁⢀⣠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠁⠀⡠⠊⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⢉⠔⠈⠀⣠⣶⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡠⠊⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⡡⠂⠁⢀⣴⣾⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⢋⠠⠊⠀⣠⣴⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⢁⠔⠁⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⢁⠔⠁⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⢁⡔⠁⠀⢀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁⡠⠊⠀⠀⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⠋⢀⡜⠁⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⡿⠁⢠⠎⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠋⠛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⢀⣀⣤⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⡟⠀⠀⡞⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⡿⠟⠉⠀⣀⠤⠒⣁⣤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⡿⡀⠀⠸⣧⣾⣿⣿⣿⣿⣿⣿⠿⢛⣁⠤⠔⠂⣁⣤⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⡇⠇⢀⣴⣿⣿⣿⣿⣿⠿⠛⠛⠉⣁⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣮⣾⣿⣿⣿⣛⣉⣤⣤⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-//   ⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
+As an example, this output was encoded from a 134px by 108px image of Saturn:
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡿⡻⡫⡫⡣⣣⢣⢇⢧⢫⢻⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡟⡟⣝⣜⠼⠼⢚⢚⢚⠓⠷⣧⣇⠧⡳⡱⣻⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡟⣏⡧⠧⠓⠍⡂⡂⠅⠌⠄⠄⠄⡁⠢⡈⣷⡹⡸⣪⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⠿⢿⢿⢿⢟⢏⡧⠗⡙⡐⡐⣌⢬⣒⣖⣼⣼⣸⢸⢐⢁⠂⡐⢰⡏⣎⢮⣾⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣽⣾⣶⣿⢿⢻⡱⢕⠋⢅⠢⠱⢼⣾⣾⣿⣿⣿⣿⣿⣿⣿⡇⡇⠢⢁⢂⡯⡪⣪⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⠏⢎⠪⠨⡐⠔⠁⠁⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⢱⠡⡁⣢⢏⢮⣾⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⢍⢆⢃⢑⠤⠑⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣿⡿⡱⢑⢐⢼⢱⣵⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⢫⡱⢊⢂⢢⠢⡃⠌⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⢟⢑⢌⢦⢫⣪⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡻⡱⡑⢅⢢⣢⣳⢱⢑⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⡑⡑⡴⡹⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⢝⠜⠨⡐⣴⣵⣿⣗⡧⡣⠢⢈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣜⢎⣷⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡫⡱⠑⡁⣌⣮⣾⣿⣿⣿⣟⡮⡪⡪⡐⠠⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⢏⠜⠌⠄⣕⣼⣿⣿⣿⣿⣿⣿⣯⡯⣎⢖⠌⠌⠄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢨⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⢕⠕⢁⠡⣸⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⡽⡮⡪⡪⠨⡂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⢕⠕⢁⢐⢔⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢽⡱⡱⡑⡠⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⢕⠕⢁⢐⢰⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⣞⢜⠔⢄⠡⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⡿⡹⡰⠃⢈⠠⣢⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡮⣇⢏⢂⠢⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⢫⢒⡜⠐⠀⢢⣱⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣳⢕⢕⠌⠄⡀⠀⠀⢀⣤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⡿⡑⣅⠗⠀⡀⣥⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⢙⠙⠿⣿⣿⣿⣿⣿⣿⣿⣿⣯⢮⡪⣂⣢⣬⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⡟⡜⢌⡞⡀⣡⣾⣿⣿⣿⣿⣿⣿⣿⡿⠛⠉⢀⡠⠔⢜⣱⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⡿⡸⡘⢜⣧⣾⣿⣿⣿⣿⣿⣿⠿⢛⡡⠤⡒⢪⣑⣬⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⡇⡇⡣⣷⣿⣿⣿⣿⣿⠿⡛⡣⡋⣕⣬⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣮⣺⣿⣿⣟⣻⣩⣢⣵⣾⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+	⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
+*/
 func Encode(w io.Writer, img image.Image) error {
 	converted := convert(img)
 	bounds := converted.Bounds()
@@ -146,10 +106,11 @@ func Encode(w io.Writer, img image.Image) error {
 			// Draw left-right, top-bottom.
 			for y := 0; y < 4; y++ {
 				for x := 0; x < 2; x++ {
-					// The color model will handle black/white inversion, however
-					// transparent pixels need to be drawn as black if inversion is set.
-					clr := converted.at(px+x, py+y)
-					if clr == black {
+					if px+x >= bounds.Max.X || py+y >= bounds.Max.Y {
+						continue
+					}
+					// Always bet on black
+					if converted.At(px+x, py+y) == color.Black {
 						b[x][y] = 1
 					}
 				}
@@ -165,39 +126,13 @@ func Encode(w io.Writer, img image.Image) error {
 	return nil
 }
 
-func Decode(r io.Reader) (image.Image, error) {
-	img, _, err := image.Decode(r)
-	if err != nil {
-		return nil, err
-	}
-	return convert(img), nil
-}
+var palette = []color.Color{color.Black, color.White, color.Transparent}
 
-func convert(img image.Image) *Image {
-	if casted, ok := img.(*Image); ok {
-		return casted
-	}
-
-	bounds := img.Bounds()
-	converted := Image{
-		bounds: bounds,
-		pixels: make([]mono, bounds.Dx()*bounds.Dy()),
-		stride: bounds.Dx(),
-		model:  colorModel{},
-	}
-
-	var i int
-
-	// An image's bounds do not necessarily start at (0, 0), so the two loops start
-	// at bounds.Min.Y and bounds.Min.X.
-	// Looping over Y first and X second is more likely to result in better memory
-	// access patterns than X first and Y second.
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			converted.pixels[i] = converted.model.Convert(img.At(x, y)).(mono)
-			i++
-		}
-	}
-
-	return &converted
+func convert(img image.Image) *image.Paletted {
+	// Create a new paletted image using a monochrome+transparent color palette.
+	paletted := image.NewPaletted(img.Bounds(), palette)
+	// Redraw the image with floyd steinberg image diffusion. This
+	// allows us to simulate gray or shaded regions with monochrome.
+	draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, img.Bounds().Min)
+	return paletted
 }

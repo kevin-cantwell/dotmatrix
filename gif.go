@@ -10,38 +10,19 @@ import (
 	"time"
 )
 
-var (
-	palette = color.Palette{transparent, black, white}
-)
-
-func newPaletted(img *Image) *image.Paletted {
-	pix := make([]uint8, len(img.pixels))
-	for i, p := range img.pixels {
-		switch p {
-		case transparent:
-			pix[i] = 0
-		case black:
-			pix[i] = 1
-		case white:
-			pix[i] = 2
-		}
-	}
-	return &image.Paletted{
-		Pix:     pix,
-		Rect:    img.Bounds(),
-		Stride:  img.stride,
-		Palette: palette,
-	}
-}
-
-// TODO comment
+/*
+PlayGIF is an experimental function that will draw each frame of a gif to
+the given writer (usually os.Stdout). Terminal codes are used to reposition
+the cursor at the beginning of each frame. Delays and disposal methods are
+respected.
+*/
 func PlayGIF(w io.Writer, giff *gif.GIF) error {
 	var screen *image.Paletted
 
 	for c := 0; giff.LoopCount == 0 || c < giff.LoopCount; c++ {
 		for i := 0; i < len(giff.Image); i++ {
 			delay := time.After(time.Duration(giff.Delay[i]) * time.Second / 100)
-			frame := newPaletted(convert(giff.Image[i]))
+			frame := convert(giff.Image[i])
 
 			// Always draw the first frame from scratch
 			if i == 0 {
@@ -53,7 +34,7 @@ func PlayGIF(w io.Writer, giff *gif.GIF) error {
 			case gif.DisposalPrevious:
 				previous := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(previous.Pix, screen.Pix)
-				draw(screen, frame)
+				drawFrame(screen, frame)
 				if err := flush(w, screen); err != nil {
 					return err
 				}
@@ -65,18 +46,18 @@ func PlayGIF(w io.Writer, giff *gif.GIF) error {
 				for i := 0; i < len(background.Pix); i++ {
 					background.Pix[i] = 2
 				}
-				draw(screen, frame)
+				drawFrame(screen, frame)
 				if err := flush(w, screen); err != nil {
 					return err
 				}
 				<-delay
-				draw(screen, background)
+				drawFrame(screen, background)
 				if err := flush(w, screen); err != nil {
 					return err
 				}
 			// Dispose none or undefined means we just draw what we got over top
 			default:
-				draw(screen, frame)
+				drawFrame(screen, frame)
 				if err := flush(w, screen); err != nil {
 					return err
 				}
@@ -87,12 +68,12 @@ func PlayGIF(w io.Writer, giff *gif.GIF) error {
 	return nil
 }
 
-func draw(target *image.Paletted, source image.Image) {
+func drawFrame(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			c := source.At(x, y)
-			if c == transparent {
+			if c == color.Transparent {
 				continue
 			}
 			target.Set(x, y, c)
