@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	_ "golang.org/x/image/bmp"
 
 	"github.com/codegangsta/cli"
 	"github.com/disintegration/imaging"
@@ -32,48 +35,36 @@ func main() {
 	app.Author = "Kevin Cantwell"
 	app.Email = "kevin.cantwell@gmail.com"
 	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "invert,i",
+			Usage: "Inverts black and white pixels.",
+		},
 		cli.StringFlag{
 			Name:  "fit,f",
-			Usage: "`FIT` = 80,25 scales down the image to fit 80 columns and 25 lines.",
-			Value: "80,25",
+			Usage: "`W,H` = 80,25 scales down the image to fit a terminal size of 80 by 25.",
+			Value: func() string {
+				w, h, _ := getTerminalSize()
+				return fmt.Sprintf("%d,%d", w, h)
+			}(),
 		},
 		cli.Float64Flag{
 			Name:  "gamma,g",
-			Usage: "`GAMMA` = 1.0 gives the original image. GAMMA less than 1.0 darkens the image and GAMMA greater than 1.0 lightens it.",
-			Value: 1.0,
+			Usage: "GAMMA less than 0 darkens the image and GAMMA greater than 0 lightens it.",
 		},
 		cli.Float64Flag{
 			Name:  "brightness,b",
-			Usage: "`BRIGHTNESS` = 0 gives the original image. BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image.",
+			Usage: "BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image.",
 			Value: 0.0,
 		},
 		cli.Float64Flag{
 			Name:  "contrast,c",
-			Usage: "`CONTRAST` = 0 gives the original image. CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast.",
+			Usage: "CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast.",
 			Value: 0.0,
 		},
 		cli.Float64Flag{
 			Name:  "sharpen,s",
-			Usage: "`SHARPEN` = 0 gives the original image. SHARPEN greater than 0 sharpens the image.",
+			Usage: "SHARPEN greater than 0 sharpens the image.",
 			Value: 0.0,
-		},
-		cli.BoolFlag{
-			Name:  "invert,i",
-			Usage: "Inverts the image.",
-		},
-		cli.Float64Flag{
-			Name:  "sigmoid-midpoint",
-			Usage: "`MIDPOINT` of contrast that must be between 0 and 1.",
-			Value: 0.5,
-		},
-		cli.Float64Flag{
-			Name:  "sigmoid-factor",
-			Usage: "`FACTOR` = 0 gives the original image. FACTOR greater than 0 increases contrast. FACTOR less than 0 decreases contrast.",
-			Value: 0.0,
-		},
-		cli.BoolFlag{
-			Name:  "play,p",
-			Usage: "EXPERIMENTAL! Animates gifs in the terminal. ESC or CTRL-C to quit.",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -97,26 +88,35 @@ func main() {
 			reader = os.Stdin
 		}
 
+		// Tee out the reads while we attempt to decode the gif
+		var buf bytes.Buffer
+		tee := io.TeeReader(reader, &buf)
+
 		// First try to play the input as an animated gif
-		if c.Bool("play") {
-			giff, err := gif.DecodeAll(reader)
-			if err != nil {
+		if giff, err := gif.DecodeAll(tee); err == nil {
+			// Don't animate gifs with only a single frame
+			if len(giff.Image) == 1 {
+				if err := encodeImage(c, giff.Image[0]); err != nil {
+					exit(err.Error(), 1)
+				}
+				return
+			}
+			// Animate
+			if err := playGIF(c, giff, scalar(c, giff.Image[0])); err != nil {
 				exit(err.Error(), 1)
 			}
-			playGIF(c, giff, scalar(c, giff.Image[0]))
 			return
 		}
 
-		// Encode image as a dotmatrix pattern
-		img, _, err := image.Decode(reader)
+		// Copy the remaining bytes into the buffer
+		io.Copy(&buf, reader)
+		// Now try to decode the image as static png/jpeg/gif
+		img, _, err := image.Decode(&buf)
 		if err != nil {
 			exit(err.Error(), 1)
 		}
-
-		// Preproces the image
-		img = preprocessImage(c, img, scalar(c, img))
-
-		if err := dotmatrix.Encode(os.Stdout, img); err != nil {
+		// Encode image as a dotmatrix pattern
+		if err := encodeImage(c, img); err != nil {
 			exit(err.Error(), 1)
 		}
 	}
@@ -126,7 +126,15 @@ func main() {
 	}
 }
 
-func playGIF(c *cli.Context, giff *gif.GIF, scale float32) {
+func encodeImage(c *cli.Context, img image.Image) error {
+	img = preprocessImage(c, img, scalar(c, img))
+	return dotmatrix.Encode(os.Stdout, img)
+}
+
+func playGIF(c *cli.Context, giff *gif.GIF, scale float32) error {
+	if len(giff.Image) == 1 {
+		return encodeImage(c, giff.Image[0])
+	}
 	giff.Config = image.Config{
 		Width:  int(float32(giff.Config.Width) * scale),
 		Height: int(float32(giff.Config.Height) * scale),
@@ -134,9 +142,7 @@ func playGIF(c *cli.Context, giff *gif.GIF, scale float32) {
 	for i, frame := range giff.Image {
 		giff.Image[i] = preprocessImage(c, frame, scale)
 	}
-	if err := dotmatrix.PlayGIF(os.Stdout, giff); err != nil {
-		exit(err.Error(), 1)
-	}
+	return dotmatrix.PlayGIF(os.Stdout, giff)
 }
 
 func scalar(c *cli.Context, img image.Image) float32 {
@@ -187,7 +193,8 @@ func preprocessImage(c *cli.Context, img image.Image, scale float32) *image.Pale
 	img = resize.Thumbnail(width, height, img, resize.NearestNeighbor)
 
 	if c.IsSet("gamma") {
-		img = imaging.AdjustGamma(img, c.Float64("gamma"))
+		gamma := c.Float64("gamma") + 1.0
+		img = imaging.AdjustGamma(img, gamma)
 	}
 	if c.IsSet("brightness") {
 		img = imaging.AdjustBrightness(img, c.Float64("brightness"))
@@ -197,9 +204,6 @@ func preprocessImage(c *cli.Context, img image.Image, scale float32) *image.Pale
 	}
 	if c.IsSet("contrast") {
 		img = imaging.AdjustContrast(img, c.Float64("contrast"))
-	}
-	if c.IsSet("sigmoid-midpoint") || c.IsSet("sigmoid-factor") {
-		img = imaging.AdjustSigmoid(img, c.Float64("sigmoid-midpoint"), c.Float64("sigmoid-factor"))
 	}
 	if c.Bool("invert") {
 		img = imaging.Invert(img)
