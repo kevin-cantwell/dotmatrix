@@ -1,0 +1,40 @@
+{
+	"ImportPath": "github.com/kevin-cantwell/dotmatrix",
+	"GoVersion": "go1.6",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "v1.14.0-7-g4733699",
+			"Rev": "4733699ce30faa633c4db36ebfbe427963593d7d"
+		},
+		{
+			"ImportPath": "github.com/disintegration/imaging",
+			"Rev": "d8bbae1de109b518dabc98c6c1633eb358c148a4"
+		},
+		{
+			"ImportPath": "github.com/nfnt/resize",
+			"Rev": "4d93a29130b1b6aba503e2aa8b50f516213ea80e"
+		},
+		{
+			"ImportPath": "github.com/onsi/ginkgo",
+			"Comment": "v1.2.0-11-gd94e2f4",
+			"Rev": "d94e2f4000332f62b356ecb2840c98f4218f5358"
+		},
+		{
+			"ImportPath": "github.com/onsi/gomega",
+			"Comment": "v1.0-52-ga2ab864",
+			"Rev": "a2ab8644e0b6a33df2cbe44673bd0f6ebba9abc3"
+		},
+		{
+			"ImportPath": "golang.org/x/image/bmp",
+			"Rev": "f551d3a6b7fc11df315ad9e18b404280680f8bec"
+		},
+		{
+			"ImportPath": "golang.org/x/image/tiff",
+			"Rev": "f551d3a6b7fc11df315ad9e18b404280680f8bec"
+		}
+	]
+}
