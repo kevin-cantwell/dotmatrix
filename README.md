@@ -6,7 +6,9 @@
 Dotmatrix is a simple and fun package & command-line utility for encoding images to all-braille unicode representations. It can be used as a standalone command-line utility or as a package. Currently jpeg, gif, png, and bmp types are supported. 
 
 Animated gif support is experimental, but awesome ;)
-NOTE: Some terminals, such as iTerm2, have a poor refresh rate when playing animated gifs. This cannot be helped. The default terminal on OSX is quite speedy though.
+NOTE: Some terminals, such as iTerm2, have a poor refresh rate when playing animated gifs. This cannot be helped. The default terminal on OSX is quite speedy though. This is what it looks like:
+
+![lemonade](https://cloud.githubusercontent.com/assets/307864/16272242/0dc3b6d8-386b-11e6-9ea3-e55ee936ae54.gif)
 
 
 [Godocs](https://godoc.org/github.com/kevin-cantwell/dotmatrix)
@@ -49,6 +51,7 @@ GLOBAL OPTIONS:
    --brightness, -b "0"       BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image.
    --contrast, -c "0"         CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast.
    --sharpen, -s "0"          SHARPEN greater than 0 sharpens the image.
+   --partymode, -p            Animates gifs in party mode.
    --help, -h                 show help
    --version, -v              print the version
 ```
