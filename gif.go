@@ -107,6 +107,7 @@ func drawExact(target *image.Paletted, source image.Image) {
 }
 
 func flush(w io.Writer, img image.Image) error {
+	w.Write([]byte("\033[0m")) // This can be used to hijack writer and detect when we start a new frame
 	var buf bytes.Buffer
 	if err := Encode(&buf, img); err != nil {
 		return err

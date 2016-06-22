@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/kevin-cantwell/dotmatrix"
 	"github.com/nfnt/resize"
+	"golang.org/x/net/context"
 )
 
 func main() {
@@ -65,6 +67,10 @@ func main() {
 			Name:  "sharpen,s",
 			Usage: "SHARPEN greater than 0 sharpens the image.",
 			Value: 0.0,
+		},
+		cli.BoolFlag{
+			Name:  "partymode,p",
+			Usage: "Animates gifs in party mode.",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -132,6 +138,27 @@ func encodeImage(c *cli.Context, img image.Image) error {
 }
 
 func playGIF(c *cli.Context, giff *gif.GIF, scale float32) error {
+	var w io.Writer = os.Stdout
+	w.Write([]byte("\033[?25l")) // Hide cursor
+
+	ctx, cancel := context.WithCancel(context.Background())
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		s := <-signals
+		cancel()
+		w.Write([]byte("\033[0m"))            // Reset text color to default
+		w.Write([]byte("\033[?12l\033[?25h")) // Show cursor
+		// Stop notifying this channel
+		signal.Stop(signals)
+		// All Signals returned by the signal package should be of type syscall.Signal
+		if signum, ok := s.(syscall.Signal); ok {
+			syscall.Kill(syscall.Getpid(), signum)
+		} else {
+			panic(fmt.Sprintf("unexpected signal: %v", s))
+		}
+	}()
+
 	if len(giff.Image) == 1 {
 		return encodeImage(c, giff.Image[0])
 	}
@@ -142,7 +169,50 @@ func playGIF(c *cli.Context, giff *gif.GIF, scale float32) error {
 	for i, frame := range giff.Image {
 		giff.Image[i] = preprocessPaletted(c, frame, scale)
 	}
-	return dotmatrix.PlayGIF(os.Stdout, giff)
+	if c.Bool("partymode") {
+		w = &partyWriter{
+			ctx:    ctx,
+			writer: os.Stdout,
+			colors: partyLights,
+		}
+	}
+	return dotmatrix.PlayGIF(w, giff)
+}
+
+type partyWriter struct {
+	ctx      context.Context
+	writer   io.Writer
+	colors   []int
+	colorIdx int
+}
+
+var partyLights = []int{
+	425,
+	227,
+	47,
+	5, // Blue
+	275,
+	383,
+	419,
+	202,
+	204,
+}
+
+func (w *partyWriter) Write(b []byte) (int, error) {
+	if string(b) == "\033[0m" {
+		if w.colorIdx >= len(w.colors) {
+			w.colorIdx = 0
+		}
+		n, err := w.writer.Write([]byte(fmt.Sprintf("\033[38;5;%dm", w.colors[w.colorIdx])))
+		w.colorIdx++
+		select {
+		case <-w.ctx.Done():
+			w.writer.Write([]byte("\033[0m"))
+		default:
+		}
+		return n, err
+	}
+	return w.writer.Write(b)
 }
 
 func scalar(c *cli.Context, w, h int) (scale float32) {
