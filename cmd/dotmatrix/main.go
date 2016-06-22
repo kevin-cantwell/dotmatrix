@@ -102,7 +102,7 @@ func main() {
 				return
 			}
 			// Animate
-			if err := playGIF(c, giff, scalar(c, giff.Image[0])); err != nil {
+			if err := playGIF(c, giff, scalar(c, giff.Config.Width, giff.Config.Height)); err != nil {
 				exit(err.Error(), 1)
 			}
 			return
@@ -127,7 +127,7 @@ func main() {
 }
 
 func encodeImage(c *cli.Context, img image.Image) error {
-	img = preprocessNonPaletted(c, img, scalar(c, img))
+	img = preprocessNonPaletted(c, img, scalar(c, img.Bounds().Dx(), img.Bounds().Dy()))
 	return dotmatrix.Encode(os.Stdout, img)
 }
 
@@ -145,7 +145,14 @@ func playGIF(c *cli.Context, giff *gif.GIF, scale float32) error {
 	return dotmatrix.PlayGIF(os.Stdout, giff)
 }
 
-func scalar(c *cli.Context, img image.Image) float32 {
+func scalar(c *cli.Context, w, h int) (scale float32) {
+	defer func() {
+		// Never scale larger, only smaller
+		if scale > 1.0 {
+			scale = 1.0
+		}
+	}()
+
 	var cols, lines int
 	if c.IsSet("fit") {
 		parts := strings.Split(c.String("fit"), ",")
@@ -163,21 +170,24 @@ func scalar(c *cli.Context, img image.Image) float32 {
 		}
 	}
 
-	// Multiply cols by 2 since each braille symbol is 2 pixels wide
-	// Multiply lines by 4 since each braille symbol is 4 pixels high
-	sx, sy := scalarX(cols, img.Bounds().Dx()), scalarY(lines, img.Bounds().Dy())
+	sx, sy := scalarX(cols, w), scalarY(lines, h)
 	if sx == 0 {
-		return sy
+		scale = sy
+		return
 	}
 	if sy == 0 {
-		return sx
+		scale = sx
+		return
 	}
 	if sx < sy {
-		return sx
+		scale = sx
+		return
 	}
-	return sy
+	scale = sy
+	return
 }
 
+// Multiply cols by 2 since each braille symbol is 2 pixels wide
 func scalarX(cols int, dx int) float32 {
 	if cols == 0 {
 		return 0
@@ -185,6 +195,7 @@ func scalarX(cols int, dx int) float32 {
 	return float32(cols*2) / float32(dx)
 }
 
+// Multiply lines by 4 since each braille symbol is 4 pixels high
 func scalarY(lines int, dy int) float32 {
 	if lines == 0 {
 		return 0
@@ -202,25 +213,14 @@ func preprocessPaletted(c *cli.Context, img *image.Paletted, scale float32) *ima
 		return img
 	}
 
-	// paletted := &image.Paletted{
-	// 	Pix:     make([]uint8, processed.Bounds().Dx()*processed.Bounds().Dy()),
-	// 	Stride:  processed.Bounds().Dy(),
-	// 	Palette: make(color.Palette, len(img.Palette)),
-	// }
-
-	// bounds := processed.Bounds()
-	// for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-	// 	for x := bounds.Min.X; x < bounds.Max.X; x++ {
-	// 		paletted.Set(x, y, processed.At(x, y))
-	// 	}
-	// }
-
 	// Create a new paletted image using a monochrome+transparent color palette.
 	paletted := image.NewPaletted(processed.Bounds(), color.Palette{color.Black, color.White, color.Transparent})
 
 	// If an image adjustment has occurred, we must redefine the bounds so that
 	// we maintain the starting point. Not all images start at (0,0) after all.
-	offset := image.Pt(int(float32(img.Bounds().Min.X)*scale), int(float32(img.Bounds().Min.Y)*scale))
+	minX := img.Bounds().Min.X
+	minY := img.Bounds().Min.Y
+	offset := image.Pt(int(float32(minX)*scale), int(float32(minY)*scale))
 	paletted.Rect = paletted.Bounds().Add(offset)
 	// // Redraw the image with floyd steinberg image diffusion. This
 	// // allows us to simulate gray or shaded regions with monochrome.
@@ -230,7 +230,7 @@ func preprocessPaletted(c *cli.Context, img *image.Paletted, scale float32) *ima
 
 func preprocessImage(c *cli.Context, img image.Image, scale float32) image.Image {
 	width, height := uint(float32(img.Bounds().Dx())*scale), uint(float32(img.Bounds().Dy())*scale)
-	img = resize.Thumbnail(width, height, img, resize.NearestNeighbor)
+	img = resize.Resize(width, height, img, resize.NearestNeighbor)
 
 	if c.IsSet("gamma") {
 		gamma := c.Float64("gamma") + 1.0
