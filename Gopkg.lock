@@ -1,0 +1,55 @@
+memo = "ede0793e215e1874d7482a35e75f0583955e051b180ccd0454d0aebb0d0c65ad"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/codegangsta/cli"
+  packages = ["."]
+  revision = "347a9884a87374d000eec7e6445a34487c1f4a2b"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/disintegration/imaging"
+  packages = ["."]
+  revision = "d8bbae1de109b518dabc98c6c1633eb358c148a4"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/nfnt/resize"
+  packages = ["."]
+  revision = "4d93a29130b1b6aba503e2aa8b50f516213ea80e"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/onsi/ginkgo"
+  packages = [".","config","internal/codelocation","internal/containernode","internal/failer","internal/leafnodes","internal/remote","internal/spec","internal/specrunner","internal/suite","internal/testingtproxy","internal/writer","reporters","reporters/stenographer","types"]
+  revision = "09289bfe14b68884754576c1d8cd01c7f630b40b"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/onsi/gomega"
+  packages = [".","format","internal/assertion","internal/asyncassertion","internal/oraclematcher","internal/testingtsupport","matchers","matchers/support/goraph/bipartitegraph","matchers/support/goraph/edge","matchers/support/goraph/node","matchers/support/goraph/util","types"]
+  revision = "d59fa0ac68bb5dd932ee8d24eed631cdd519efc3"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/image"
+  packages = ["bmp","tiff","tiff/lzw"]
+  revision = "f551d3a6b7fc11df315ad9e18b404280680f8bec"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/net"
+  packages = ["context"]
+  revision = "906cda9512f77671ab44f8c8563b13a8e707b230"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "d75a52659825e75fff6158388dddc6a5b04f9ba5"
+
+[[projects]]
+  branch = "master"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "a5b47d31c556af34a302ce5d659e6fea44d90de0"

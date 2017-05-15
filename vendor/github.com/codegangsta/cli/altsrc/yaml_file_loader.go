@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
+	"strings"
 
-	"github.com/codegangsta/cli"
+	"gopkg.in/urfave/cli.v1"
 
 	"gopkg.in/yaml.v2"
 )
@@ -24,7 +26,7 @@ type yamlSourceContext struct {
 // NewYamlSourceFromFile creates a new Yaml InputSourceContext from a filepath.
 func NewYamlSourceFromFile(file string) (InputSourceContext, error) {
 	ysc := &yamlSourceContext{FilePath: file}
-	var results map[string]interface{}
+	var results map[interface{}]interface{}
 	err := readCommandYaml(ysc.FilePath, &results)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load Yaml file '%s': inner error: \n'%v'", ysc.FilePath, err.Error())
@@ -74,6 +76,12 @@ func loadDataFrom(filePath string) ([]byte, error) {
 			return nil, fmt.Errorf("scheme of %s is unsupported", filePath)
 		}
 	} else if u.Path != "" { // i dont have a host, but I have a path. I am a local file.
+		if _, notFoundFileErr := os.Stat(filePath); notFoundFileErr != nil {
+			return nil, fmt.Errorf("Cannot read from file: '%s' because it does not exist.", filePath)
+		}
+		return ioutil.ReadFile(filePath)
+	} else if runtime.GOOS == "windows" && strings.Contains(u.String(), "\\") {
+		// on Windows systems u.Path is always empty, so we need to check the string directly.
 		if _, notFoundFileErr := os.Stat(filePath); notFoundFileErr != nil {
 			return nil, fmt.Errorf("Cannot read from file: '%s' because it does not exist.", filePath)
 		}

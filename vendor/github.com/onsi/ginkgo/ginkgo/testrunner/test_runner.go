@@ -33,10 +33,11 @@ type TestRunner struct {
 	cover          bool
 	coverPkg       string
 	tags           string
+	gcFlags        string
 	additionalArgs []string
 }
 
-func New(suite testsuite.TestSuite, numCPU int, parallelStream bool, race bool, cover bool, coverPkg string, tags string, additionalArgs []string) *TestRunner {
+func New(suite testsuite.TestSuite, numCPU int, parallelStream bool, race bool, cover bool, coverPkg string, tags string, gcFlags string, additionalArgs []string) *TestRunner {
 	runner := &TestRunner{
 		Suite:          suite,
 		numCPU:         numCPU,
@@ -46,12 +47,13 @@ func New(suite testsuite.TestSuite, numCPU int, parallelStream bool, race bool, 
 		coverPkg:       coverPkg,
 		tags:           tags,
 		additionalArgs: additionalArgs,
+		gcFlags:        gcFlags,
 	}
 
 	if !suite.Precompiled {
 		dir, err := ioutil.TempDir("", "ginkgo")
 		if err != nil {
-			panic(fmt.Sprintf("coulnd't create temporary directory... might be time to rm -rf:\n%s", err.Error()))
+			panic(fmt.Sprintf("couldn't create temporary directory... might be time to rm -rf:\n%s", err.Error()))
 		}
 		runner.compilationTargetPath = filepath.Join(dir, suite.PackageName+".test")
 	}
@@ -72,7 +74,7 @@ func (t *TestRunner) CompileTo(path string) error {
 		return nil
 	}
 
-	args := []string{"test", "-c", "-i", "-o", path}
+	args := []string{"test", "-c", "-i", "-o", path, t.Suite.Path}
 	if t.race {
 		args = append(args, "-race")
 	}
@@ -85,10 +87,11 @@ func (t *TestRunner) CompileTo(path string) error {
 	if t.tags != "" {
 		args = append(args, fmt.Sprintf("-tags=%s", t.tags))
 	}
+	if t.gcFlags != "" {
+		args = append(args, fmt.Sprintf("-gcflags=%s", t.gcFlags))
+	}
 
 	cmd := exec.Command("go", args...)
-
-	cmd.Dir = t.Suite.Path
 
 	output, err := cmd.CombinedOutput()
 
@@ -101,13 +104,18 @@ func (t *TestRunner) CompileTo(path string) error {
 	}
 
 	if fileExists(path) == false {
-		compiledFile := filepath.Join(t.Suite.Path, t.Suite. PackageName+".test")
+		compiledFile := t.Suite.PackageName + ".test"
 		if fileExists(compiledFile) {
 			// seems like we are on an old go version that does not support the -o flag on go test
 			// move the compiled test file to the desired location by hand
 			err = os.Rename(compiledFile, path)
 			if err != nil {
-				return fmt.Errorf("Failed to move compiled file: %s", err)
+				// We cannot move the file, perhaps because the source and destination
+				// are on different partitions. We can copy the file, however.
+				err = copyFile(compiledFile, path)
+				if err != nil {
+					return fmt.Errorf("Failed to copy compiled file: %s", err)
+				}
 			}
 		} else {
 			return fmt.Errorf("Failed to compile %s: output file %q could not be found", t.Suite.PackageName, path)
@@ -122,6 +130,49 @@ func (t *TestRunner) CompileTo(path string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || os.IsNotExist(err) == false
+}
+
+// copyFile copies the contents of the file named src to the file named
+// by dst. The file will be created if it does not already exist. If the
+// destination file exists, all it's contents will be replaced by the contents
+// of the source file.
+func copyFile(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	mode := srcInfo.Mode()
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		closeErr := out.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+
+	err = out.Sync()
+	if err != nil {
+		return err
+	}
+
+	return out.Chmod(mode)
 }
 
 /*
