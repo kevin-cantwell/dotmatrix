@@ -7,7 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/gif"
-	_ "image/jpeg"
+	"image/jpeg"
 	_ "image/png"
 	"io"
 	"net/http"
@@ -72,8 +72,12 @@ func main() {
 			Name:  "partymode,p",
 			Usage: "Animates gifs in party mode.",
 		},
+		cli.BoolFlag{
+			Name:  "mjpeg,m",
+			Usage: "Processes input as an mjpeg stream.",
+		},
 	}
-	app.Action = func(c *cli.Context) {
+	app.Action = func(c *cli.Context) error {
 		var reader io.Reader
 
 		// Try to parse the args, if there are any, as a file or url
@@ -85,7 +89,7 @@ func main() {
 				// Is it a url?
 				resp, err := http.Get(input)
 				if err != nil {
-					exit(err.Error(), 1)
+					return err
 				}
 				defer resp.Body.Close()
 				reader = resp.Body
@@ -103,32 +107,38 @@ func main() {
 			// Don't animate gifs with only a single frame
 			if len(giff.Image) == 1 {
 				if err := encodeImage(c, giff.Image[0]); err != nil {
-					exit(err.Error(), 1)
+					return err
 				}
-				return
+				return nil
 			}
 			// Animate
 			if err := playGIF(c, giff, scalar(c, giff.Config.Width, giff.Config.Height)); err != nil {
-				exit(err.Error(), 1)
+				return err
 			}
-			return
+			return nil
 		}
 
-		// Copy the remaining bytes into the buffer
-		io.Copy(&buf, reader)
+		// Assuming the gif decoing failed, copy the remaining bytes into the tee'd buffer
+		go io.Copy(&buf, reader)
+
+		if c.Bool("mjpeg") {
+			return dotmatrix.PlayMJPEG(os.Stdout, &buf, 30)
+		}
+
 		// Now try to decode the image as static png/jpeg/gif
 		img, _, err := image.Decode(&buf)
 		if err != nil {
-			exit(err.Error(), 1)
+			if err == io.EOF {
+				return nil
+			}
+			return err
 		}
 		// Encode image as a dotmatrix pattern
-		if err := encodeImage(c, img); err != nil {
-			exit(err.Error(), 1)
-		}
+		return encodeImage(c, img)
 	}
+
 	if err := app.Run(os.Args); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		exit(err.Error(), 1)
 	}
 }
 
@@ -340,4 +350,46 @@ func getTerminalSize() (width, height int, err error) {
 		return -1, -1, e
 	}
 	return int(dimensions[1]), int(dimensions[0]), nil
+}
+
+type MJPEGScanner struct {
+	rdr io.Reader
+	// buf *bytes.Buffer
+	img image.Image
+	err error
+}
+
+func NewMJPEGScanner(r io.Reader) *MJPEGScanner {
+	return &MJPEGScanner{
+		rdr: r,
+	}
+}
+
+func (s *MJPEGScanner) Scan() bool {
+	var buf bytes.Buffer
+	for {
+		if _, err := io.CopyN(&buf, s.rdr, 1); err != nil {
+			if err != io.EOF {
+				s.err = err
+			}
+			return false
+		}
+
+		if buf.Len() > 1 {
+			data := buf.Bytes()
+			if data[buf.Len()-2] == 0xff && data[buf.Len()-1] == 0xd9 {
+				s.img, s.err = jpeg.Decode(&buf)
+				return true
+			}
+		}
+
+	}
+}
+
+func (s *MJPEGScanner) Err() error {
+	return s.err
+}
+
+func (s *MJPEGScanner) Image() image.Image {
+	return s.img
 }
