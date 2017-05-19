@@ -12,6 +12,8 @@ import (
 	_ "golang.org/x/image/bmp"
 )
 
+var simplePalette = []color.Color{color.Black, color.White, color.Transparent}
+
 // Braille epresents an 8 dot braille pattern in x,y coordinates space. Eg:
 //   +----------+
 //   |(0,0)(1,0)|
@@ -43,6 +45,22 @@ func (b braille) codePoint() rune {
 //  ⣿ ⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾
 func (b braille) String() string {
 	return string(b.codePoint())
+}
+
+type Encoder struct {
+	w io.Writer
+	d draw.Drawer
+}
+
+// NewEncoder provides an Encoder. If drawer is nil, draw.FloydSteinberg is used.
+func NewEncoder(w io.Writer, d draw.Drawer) *Encoder {
+	if d == nil {
+		d = draw.FloydSteinberg
+	}
+	return &Encoder{
+		w: w,
+		d: d,
+	}
 }
 
 /*
@@ -92,8 +110,8 @@ As an example, this output was encoded from a 134px by 108px image of Saturn:
 	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 	⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
 */
-func Encode(w io.Writer, img image.Image) error {
-	converted := convert(img)
+func (enc *Encoder) Encode(img image.Image) error {
+	converted := convert(enc.d, img)
 	bounds := converted.Bounds()
 
 	// An image's bounds do not necessarily start at (0, 0), so the two loops start
@@ -115,24 +133,22 @@ func Encode(w io.Writer, img image.Image) error {
 					}
 				}
 			}
-			if _, err := w.Write([]byte(b.String())); err != nil {
+			if _, err := enc.w.Write([]byte(b.String())); err != nil {
 				return err
 			}
 		}
-		if _, err := w.Write([]byte{'\n'}); err != nil {
+		if _, err := enc.w.Write([]byte{'\n'}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-var palette = []color.Color{color.Black, color.White, color.Transparent}
-
-func convert(img image.Image) *image.Paletted {
+func convert(drawer draw.Drawer, img image.Image) *image.Paletted {
 	// Create a new paletted image using a monochrome+transparent color palette.
-	paletted := image.NewPaletted(img.Bounds(), palette)
+	paletted := image.NewPaletted(img.Bounds(), simplePalette)
 	// Redraw the image with floyd steinberg image diffusion. This
 	// allows us to simulate gray or shaded regions with monochrome.
-	draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, img.Bounds().Min)
+	draw.Src.Draw(paletted, img.Bounds(), img, img.Bounds().Min)
 	return paletted
 }

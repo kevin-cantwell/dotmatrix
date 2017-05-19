@@ -10,26 +10,29 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/disintegration/imaging"
 	"github.com/nfnt/resize"
 )
 
-func getTerminalSize() (width, height uint, err error) {
-	var dimensions [4]uint16
-	_, _, e := syscall.Syscall6(
-		syscall.SYS_IOCTL,
-		uintptr(syscall.Stderr), // TODO: Figure out why we get "inappropriate ioctl for device" errors if we use stdin or stdout
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(&dimensions)),
-		0, 0, 0,
-	)
-	if e != 0 {
-		return 160, 0, e
-	}
+func getTerminalSize() (int, int, error) {
+	w, h, err := terminal.GetSize(int(os.Stdout.Fd()))
+	return w * 2, h * 4, err
+	// var dimensions [4]uint16
+	// _, _, e := syscall.Syscall6(
+	// 	syscall.SYS_IOCTL,
+	// 	uintptr(syscall.Stderr), // TODO: Figure out why we get "inappropriate ioctl for device" errors if we use stdin or stdout
+	// 	uintptr(syscall.TIOCGWINSZ),
+	// 	uintptr(unsafe.Pointer(&dimensions)),
+	// 	0, 0, 0,
+	// )
+	// if e != 0 {
+	// 	return 160, 0, e
+	// }
+	// // return uint(dimensions[1]) * 2, uint(dimensions[0]) * 4, nil
 	// return uint(dimensions[1]) * 2, uint(dimensions[0]) * 4, nil
-	return uint(dimensions[1]) * 2, uint(dimensions[0]) * 4, nil
 }
 
 /*
@@ -63,18 +66,29 @@ func PlayMJPEG(w io.Writer, r io.Reader, fps int) error {
 	}()
 
 	mjpegs := NewMJPEGScanner(r)
-	for range time.Tick(time.Second / time.Duration(fps)) {
-		if !mjpegs.Scan() {
-			break
-		}
+	// for range time.Tick(time.Second / time.Duration(fps)) {
+	// 	if !mjpegs.Scan() {
+	// 		break
+	// 	}
+	ticker := time.Tick(time.Second / time.Duration(fps))
+	for mjpegs.Scan(ticker) {
 		img := mjpegs.Image()
-		img = resize.Resize(width, height, img, resize.NearestNeighbor)
+		img = resize.Resize(uint(width), uint(height), img, resize.NearestNeighbor)
 		img = imaging.Invert(img)
+		img = imaging.FlipH(img)
 		if err := flush(w, img); err != nil {
 			return err
 		}
+		select {
+		case <-ticker:
+		default:
+		}
 	}
 	return mjpegs.Err()
+}
+
+func flush(w io.Writer, img image.Image) error {
+	return nil
 }
 
 type MJPEGScanner struct {
@@ -89,26 +103,43 @@ func NewMJPEGScanner(r io.Reader) *MJPEGScanner {
 	}
 }
 
-func (s *MJPEGScanner) Scan() bool {
+func (s *MJPEGScanner) Scan(ticker <-chan time.Time) bool {
+	p := make([]byte, 1)
 	var buf bytes.Buffer
 	for {
-		// p := make([]byte, 1)
-		// _, err := s.rdr.Read(p)
-		if _, err := io.CopyN(&buf, s.rdr, 1); err != nil {
+		n, err := s.rdr.Read(p)
+		if n == 0 {
+			if err == nil {
+				continue
+			}
 			if err != io.EOF {
 				s.err = err
 			}
 			return false
 		}
 
+		if _, err := buf.Write(p); err != nil {
+			s.err = err
+			return false
+		}
+
 		if buf.Len() > 1 {
 			data := buf.Bytes()
 			if data[buf.Len()-2] == 0xff && data[buf.Len()-1] == 0xd9 {
-				s.img, s.err = jpeg.Decode(&buf)
-				return true
+				select {
+				case <-ticker:
+					img, err := jpeg.Decode(&buf)
+					if err != nil {
+						s.err = err
+						return false
+					}
+					s.img = img
+					return true
+				default:
+					buf.Truncate(0)
+				}
 			}
 		}
-
 	}
 }
 

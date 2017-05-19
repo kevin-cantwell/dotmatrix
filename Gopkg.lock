@@ -1,4 +1,4 @@
-memo = "ede0793e215e1874d7482a35e75f0583955e051b180ccd0454d0aebb0d0c65ad"
+memo = "918d89e858089360d9884a015e970093ee92d788b358bdc13368f2029a41cf76"
 
 [[projects]]
   branch = "master"
@@ -29,6 +29,12 @@ memo = "ede0793e215e1874d7482a35e75f0583955e051b180ccd0454d0aebb0d0c65ad"
   name = "github.com/onsi/gomega"
   packages = [".","format","internal/assertion","internal/asyncassertion","internal/oraclematcher","internal/testingtsupport","matchers","matchers/support/goraph/bipartitegraph","matchers/support/goraph/edge","matchers/support/goraph/node","matchers/support/goraph/util","types"]
   revision = "d59fa0ac68bb5dd932ee8d24eed631cdd519efc3"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  revision = "0fe963104e9d1877082f8fb38f816fcd97eb1d10"
 
 [[projects]]
   branch = "master"
