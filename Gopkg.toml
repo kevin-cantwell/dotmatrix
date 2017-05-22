@@ -61,6 +61,10 @@
 
 [[dependencies]]
   branch = "master"
+  name = "github.com/golang/freetype"
+
+[[dependencies]]
+  branch = "master"
   name = "github.com/nfnt/resize"
 
 [[dependencies]]
@@ -70,6 +74,10 @@
 [[dependencies]]
   branch = "master"
   name = "github.com/onsi/gomega"
+
+[[dependencies]]
+  branch = "master"
+  name = "golang.org/x/crypto"
 
 [[dependencies]]
   branch = "master"
