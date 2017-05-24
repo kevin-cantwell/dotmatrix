@@ -4,97 +4,63 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"image/gif"
 	"io"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
-var (
-	XtermFrameDelim = func(w io.Writer, frame image.Image) {
-		w.Write([]byte("\033[999D"))                                    // Move the cursor to the beginning of the line
-		w.Write([]byte(fmt.Sprintf("\033[%dA", frame.Bounds().Dy()/4))) // Move the cursor to the top of the image
-	}
-)
-
-type Animator struct {
-	w          io.Writer
-	frameDelim func(w io.Writer, frame image.Image)
+type GIFAnimator struct {
+	e *Encoder
+	t Terminal
 }
 
-func (a *Animator) Animate(frames <-chan image.Image) error {
-	enc := NewEncoder(a.w, nil)
-	for frame := range frames {
-		if err := enc.Encode(frame); err != nil {
-			return err
+func NewGIFAnimator(w io.Writer, f Filter, t Terminal) *GIFAnimator {
+	if f == nil {
+		f = diffuseFilter{}
+	}
+	if t == nil {
+		t = &Xterm{
+			Writer: w,
 		}
 	}
-	return nil
-}
-
-type GIFOptions struct {
-	Drawer    draw.Drawer
-	PreFrame  func(w io.Writer, frame image.Image)
-	PostFrame func(w io.Writer, frame image.Image)
-}
-
-type GIFEncoder struct {
-	w io.Writer
-	o GIFOptions
-}
-
-func NewGIFEncoder(w io.Writer, opts *GIFOptions) *GIFEncoder {
-	o := GIFOptions{}
-	if opts != nil {
-		o = *opts
-	}
-	if o.Drawer == nil {
-		o.Drawer = draw.FloydSteinberg
-	}
-	if o.PreFrame == nil {
-		o.PreFrame = func(io.Writer, image.Image) {}
-	}
-	if o.PostFrame == nil {
-		o.PostFrame = func(w io.Writer, frame image.Image) {
-			height := frame.Bounds().Dy() / 4
-			if frame.Bounds().Dy()%4 != 0 {
-				height++
-			}
-			w.Write([]byte("\033[999D"))                     // Move the cursor to the beginning of the line
-			w.Write([]byte(fmt.Sprintf("\033[%dA", height))) // Move the cursor to the top of the image
-		}
-	}
-	return &GIFEncoder{
-		w: w,
-		o: o,
+	return &GIFAnimator{
+		e: NewEncoder(w, f),
+		t: t,
 	}
 }
 
 /*
-	Encode is an experimental function that will draw each frame of a gif to
-	the encoder's writer (usually os.Stdout).
+	Animate animates a gif
 */
-func (enc *GIFEncoder) Encode(giff *gif.GIF) error {
+func (a *GIFAnimator) Animate(giff *gif.GIF) error {
 	if len(giff.Image) < 1 {
 		return nil
 	}
 
+	a.t.ShowCursor(false)
+	defer a.t.ShowCursor(true)
+	go a.handleInterrupt()
+
+	// Only used if we see background disposal methods
+	bgPallette := []color.Color{color.Transparent}
+	if giff.Config.ColorModel != nil {
+		bgPallette = giff.Config.ColorModel.(color.Palette)
+	}
+
 	// The screen is what we flush to the writer on each iteration
 	var screen *image.Paletted
-	// Only used if we see background disposal methods
-	bgPallette := color.Palette{color.Transparent}
-	if p, ok := giff.Config.ColorModel.(color.Palette); ok {
-		bgPallette = p
-	}
 
 	for c := 0; giff.LoopCount == 0 || c < giff.LoopCount; c++ {
 		for i := 0; i < len(giff.Image); i++ {
 			delay := time.After(time.Duration(giff.Delay[i]) * time.Second / 100)
-			frame := convert(enc.o.Drawer, giff.Image[i])
+			frame := convertToMonochrome(a.e.f, giff.Image[i])
 
 			// Always draw the first frame from scratch
 			if i == 0 {
-				screen = convert(enc.o.Drawer, image.NewPaletted(frame.Bounds(), bgPallette))
+				screen = convertToMonochrome(a.e.f, image.NewPaletted(frame.Bounds(), bgPallette))
 			}
 
 			switch giff.Disposal[i] {
@@ -105,7 +71,7 @@ func (enc *GIFEncoder) Encode(giff *gif.GIF) error {
 				copy(temp.Pix, screen.Pix)
 
 				drawOver(screen, frame)
-				if err := enc.flush(screen); err != nil {
+				if err := a.flush(screen); err != nil {
 					return err
 				}
 				<-delay
@@ -114,13 +80,13 @@ func (enc *GIFEncoder) Encode(giff *gif.GIF) error {
 
 			// Dispose background replaces everything just drawn with the background canvas
 			case gif.DisposalBackground:
-				background := convert(enc.o.Drawer, image.NewPaletted(frame.Bounds(), bgPallette))
+				background := convertToMonochrome(a.e.f, image.NewPaletted(frame.Bounds(), bgPallette))
 				drawExact(screen, background)
 				temp := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(temp.Pix, screen.Pix)
 
 				drawOver(screen, frame)
-				if err := enc.flush(screen); err != nil {
+				if err := a.flush(screen); err != nil {
 					return err
 				}
 				<-delay
@@ -130,7 +96,7 @@ func (enc *GIFEncoder) Encode(giff *gif.GIF) error {
 			// Dispose none or undefined means we just draw what we got over top
 			default:
 				drawOver(screen, frame)
-				if err := enc.flush(screen); err != nil {
+				if err := a.flush(screen); err != nil {
 					return err
 				}
 				<-delay
@@ -138,6 +104,39 @@ func (enc *GIFEncoder) Encode(giff *gif.GIF) error {
 		}
 	}
 	return nil
+}
+
+func (a *GIFAnimator) flush(img image.Image) error {
+	if err := a.e.Encode(img); err != nil {
+		return err
+	}
+
+	rows := img.Bounds().Dy() / 4
+	if img.Bounds().Dy()%4 != 0 {
+		rows++
+	}
+	a.t.ResetCursor(rows)
+
+	return nil
+}
+
+func (a *GIFAnimator) handleInterrupt() {
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		s := <-signals
+		a.t.ShowCursor(true)
+		// Stop notifying this channel
+		signal.Stop(signals)
+		// All Signals returned by the signal package should be of type syscall.Signal
+		if signum, ok := s.(syscall.Signal); ok {
+			// Calling os.Exit here would be a bad idea if there are other goroutines
+			// waiting to catch the same signal.
+			syscall.Kill(syscall.Getpid(), signum)
+		} else {
+			panic(fmt.Sprintf("unexpected signal: %v", s))
+		}
+	}()
 }
 
 // Draws any non-transparent pixels into target
@@ -162,15 +161,4 @@ func drawExact(target *image.Paletted, source image.Image) {
 			target.Set(x, y, source.At(x, y))
 		}
 	}
-}
-
-func (enc *GIFEncoder) flush(img image.Image) error {
-	enc.o.PreFrame(enc.w, img)
-	defer enc.o.PostFrame(enc.w, img)
-
-	if err := NewEncoder(enc.w, enc.o.Drawer).Encode(img); err != nil {
-		return err
-	}
-
-	return nil
 }

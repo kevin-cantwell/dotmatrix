@@ -1,23 +1,26 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/gif"
 	_ "image/png"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
-	"syscall"
-	"unsafe"
+	"strings"
 
 	_ "golang.org/x/image/bmp"
 
 	"github.com/codegangsta/cli"
+	"github.com/disintegration/imaging"
 	"github.com/kevin-cantwell/dotmatrix"
-	"golang.org/x/net/context"
+	"github.com/nfnt/resize"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func main() {
@@ -32,15 +35,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "invert,i",
-			Usage: "Inverts black and white pixels.",
-		},
-		cli.StringFlag{
-			Name:  "fit,f",
-			Usage: "`W,H` = 80,25 scales down the image to fit a terminal size of 80 by 25.",
-			Value: func() string {
-				w, h, _ := getTerminalSize()
-				return fmt.Sprintf("%d,%d", w, h)
-			}(),
+			Usage: "Inverts image color.",
 		},
 		cli.Float64Flag{
 			Name:  "gamma,g",
@@ -62,8 +57,8 @@ func main() {
 			Value: 0.0,
 		},
 		cli.BoolFlag{
-			Name:  "partymode,p",
-			Usage: "Animates gifs in party mode.",
+			Name:  "mirror,m",
+			Usage: "Mirrors the image.",
 		},
 		cli.BoolFlag{
 			Name:  "camera,cam",
@@ -73,84 +68,51 @@ func main() {
 			Name:  "video,vid",
 			Usage: "Use video input (Requires ffmpeg).",
 		},
+		cli.BoolFlag{
+			Name:  "mono",
+			Usage: "If specified, image is drawn without Floyd Steinberg diffusion",
+		},
 	}
 	app.Action = func(c *cli.Context) error {
-		if c.Bool("camera") {
-			cmd := exec.Command("ffmpeg", "-r", "30", "-f", "avfoundation", "-i", "FaceTime", "-f", "mjpeg", "-loglevel", "panic", "pipe:")
-			stdoutPipe, err := cmd.StdoutPipe()
-			if err != nil {
-				return err
-			}
-			defer stdoutPipe.Close()
-			if err := cmd.Start(); err != nil {
-				return err
-			}
-			go func() {
-				if err := cmd.Wait(); err != nil {
-					exit(err.Error(), 1)
-				}
-			}()
-			return dotmatrix.PlayMJPEG(os.Stdout, stdoutPipe, 30)
+		reader, mediaType, err := decodeReader(c)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		drawer := draw.FloydSteinberg
+		if c.Bool("mono") {
+			drawer = draw.Src
 		}
 
-		var reader io.Reader
-
-		// Try to parse the args, if there are any, as a file or url
-		if input := c.Args().First(); input != "" {
-			// Is it a file?
-			if file, err := os.Open(input); err == nil {
-				reader = file
-			} else {
-				// Is it a url?
-				resp, err := http.Get(input)
-				if err != nil {
-					return err
-				}
-				defer resp.Body.Close()
-				reader = resp.Body
-			}
-		} else {
-			reader = os.Stdin
-		}
-
-		if c.Bool("video") {
-			return dotmatrix.PlayMJPEG(os.Stdout, reader, 30)
-		}
-
-		// Encode image as a dotmatrix pattern
-		// return encodeImage(c, img)
-		term := dotmatrix.Terminal{
+		filter := Filter{
 			Gamma:      c.Float64("gamma"),
 			Brightness: c.Float64("brightness"),
 			Contrast:   c.Float64("contrast"),
 			Sharpen:    c.Float64("sharpen"),
 			Invert:     c.Bool("invert"),
+			Mirror:     c.Bool("mirror"),
+			Drawer:     drawer,
 		}
 
-		// Tee out the reads while we attempt to decode the gif
-		var buf bytes.Buffer
-		tee := io.TeeReader(reader, &buf)
-
-		// First try to play the input as an animated gif
-		if giff, err := gif.DecodeAll(tee); err == nil {
-			return term.PlayGIF(giff)
-		}
-
-		// Assuming the gif decoing failed, copy the remaining bytes into the tee'd buffer
-		if _, err := io.Copy(&buf, reader); err != nil {
-			return err
-		}
-
-		// Finally try to decode the image as regular image
-		img, _, err := image.Decode(&buf)
-		if err != nil {
-			if err == io.EOF {
-				return nil
+		switch mediaType {
+		case "mjpeg":
+			return dotmatrix.NewMJPEGAnimator(os.Stdout, drawer, nil).Animate(reader, 30)
+		case "gif":
+			giff, err := gif.DecodeAll(reader)
+			if err != nil {
+				return err
 			}
-			return err
+			// giff = pre.ProcessGIF(giff)
+			return dotmatrix.NewGIFAnimator(os.Stdout, filter, nil).Animate(giff)
+		default:
+			img, _, err := image.Decode(reader)
+			if err != nil {
+				return err
+			}
+			// img = pre.ProcessImage(img)
+			return dotmatrix.NewEncoder(os.Stdout, filter).Encode(img)
 		}
-
-		return term.DrawImage(img)
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -158,40 +120,54 @@ func main() {
 	}
 }
 
-type partyWriter struct {
-	ctx      context.Context
-	writer   io.Writer
-	colors   []int
-	colorIdx int
-}
-
-var partyLights = []int{
-	425,
-	227,
-	47,
-	5, // Blue
-	275,
-	383,
-	419,
-	202,
-	204,
-}
-
-func (w *partyWriter) Write(b []byte) (int, error) {
-	if string(b) == "\033[0m" {
-		if w.colorIdx >= len(w.colors) {
-			w.colorIdx = 0
+func decodeReader(c *cli.Context) (io.ReadCloser, string, error) {
+	// Are we reading from isight?
+	if c.Bool("camera") {
+		cmd := exec.Command("ffmpeg", "-r", "30", "-f", "avfoundation", "-i", "FaceTime", "-f", "mjpeg", "-loglevel", "panic", "pipe:")
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, "", err
 		}
-		n, err := w.writer.Write([]byte(fmt.Sprintf("\033[38;5;%dm", w.colors[w.colorIdx])))
-		w.colorIdx++
-		select {
-		case <-w.ctx.Done():
-			w.writer.Write([]byte("\033[0m"))
-		default:
+		if err := cmd.Start(); err != nil {
+			return nil, "", err
 		}
-		return n, err
+		go func() {
+			if err := cmd.Wait(); err != nil {
+				exit(err.Error(), 1)
+			}
+		}()
+		return stdoutPipe, "mjpeg", nil
 	}
-	return w.writer.Write(b)
+
+	// Get the input argument
+	input := c.Args().First()
+	if input == "" {
+		return nil, "", errors.New("dotmatrix: no input specified")
+	}
+
+	// What's the media type?
+	var mediaType string
+	switch {
+	case strings.HasSuffix(strings.ToLower(input), ".gif"):
+		mediaType = "gif"
+	case strings.HasSuffix(strings.ToLower(input), ".mjpeg"):
+		mediaType = "mjpeg"
+	default:
+		mediaType = "image"
+	}
+
+	// Is it a url?
+	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
+		if resp, err := http.Get(input); err != nil {
+			return nil, "", err
+		} else {
+			return resp.Body, mediaType, nil
+		}
+	}
+
+	// Is it a file?
+	file, err := os.Open(input)
+	return file, mediaType, err
 }
 
 func exit(msg string, code int) {
@@ -199,17 +175,243 @@ func exit(msg string, code int) {
 	os.Exit(code)
 }
 
-func getTerminalSize() (width, height int, err error) {
-	var dimensions [4]uint16
-	_, _, e := syscall.Syscall6(
-		syscall.SYS_IOCTL,
-		uintptr(syscall.Stderr), // TODO: Figure out why we get "inappropriate ioctl for device" errors if we use stdin or stdout
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(&dimensions)),
-		0, 0, 0,
-	)
-	if e != 0 {
-		return -1, -1, e
+type PreProcessor struct {
+	// Gamma less than 0 darkens the image and GAMMA greater than 0 lightens it.
+	Gamma float64
+	// Brightness = -100 gives solid black image. Brightness = 100 gives solid white image.
+	Brightness float64
+	// Contrast = -100 gives solid grey image. Contrast = 100 gives maximum contrast.
+	Contrast float64
+	// Sharpen greater than 0 sharpens the image.
+	Sharpen float64
+	// Inverts pixel color. Transparent pixels remain transparent.
+	Invert bool
+	// Mirror flips the image on it's vertical axis
+	Mirror bool
+	// Drawer is the algorithm for converting the image to monochrome
+	Drawer draw.Drawer
+}
+
+func (p *PreProcessor) ProcessImage(img image.Image) image.Image {
+	cols, rows := p.terminalDimensions()
+	dx, dy := img.Bounds().Dx(), img.Bounds().Dy()
+	scale := p.scalar(dx, dy, cols, rows)
+	img = p.resize(img, scale)
+	return p.adjust(img)
+}
+
+func (p *PreProcessor) ProcessGIF(giff *gif.GIF) *gif.GIF {
+	cols, rows := p.terminalDimensions()
+	dx, dy := giff.Config.Width, giff.Config.Height
+	scale := p.scalar(dx, dy, cols, rows)
+
+	newGiff := &gif.GIF{
+		Config: image.Config{
+			Width:  int(float64(giff.Config.Width) * scale),
+			Height: int(float64(giff.Config.Height) * scale),
+		},
+		Delay:           giff.Delay,
+		LoopCount:       giff.LoopCount,
+		Disposal:        giff.Disposal,
+		BackgroundIndex: giff.BackgroundIndex,
 	}
-	return int(dimensions[1]), int(dimensions[0]), nil
+
+	monoPallette := []color.Color{color.Black, color.White, color.Transparent}
+
+	// Redraw each frame of the gif to match the options
+	for _, frame := range giff.Image {
+		img := p.resize(frame, scale)
+		img = p.adjust(img)
+
+		// Create a new paletted image using gif's color palette.
+		// If an image adjustment has occurred, we must redefine the bounds so that
+		// we maintain the starting point. Not all images start at (0,0) after all.
+		paletted := image.NewPaletted(img.Bounds(), monoPallette)
+		minX := frame.Bounds().Min.X // Important to use the original frame mins here!
+		minY := frame.Bounds().Min.Y
+		offset := image.Pt(int(float64(minX)*scale), int(float64(minY)*scale))
+		paletted.Rect = paletted.Bounds().Add(offset)
+
+		p.Drawer.Draw(paletted, paletted.Bounds(), img, img.Bounds().Min)
+
+		newGiff.Image = append(newGiff.Image, paletted)
+	}
+
+	return newGiff
+}
+
+func (p *PreProcessor) resize(img image.Image, scale float64) image.Image {
+	if scale >= 1.0 {
+		return img
+	}
+	dx, dy := img.Bounds().Dx(), img.Bounds().Dy()
+	width := uint(scale * float64(dx))
+	height := uint(scale * float64(dy))
+	return resize.Resize(width, height, img, resize.NearestNeighbor)
+}
+
+func (p *PreProcessor) adjust(img image.Image) image.Image {
+	if p.Gamma != 0 {
+		img = imaging.AdjustGamma(img, p.Gamma+1.0)
+	}
+	if p.Brightness != 0 {
+		img = imaging.AdjustBrightness(img, p.Brightness)
+	}
+	if p.Sharpen != 0 {
+		img = imaging.Sharpen(img, p.Sharpen)
+	}
+	if p.Contrast != 0 {
+		img = imaging.AdjustContrast(img, p.Contrast)
+	}
+	if p.Mirror {
+		img = imaging.FlipH(img)
+	}
+	if p.Invert {
+		img = imaging.Invert(img)
+	}
+	return img
+}
+
+func (p *PreProcessor) scalar(dx, dy int, cols, rows int) float64 {
+	scale := float64(1.0)
+	scaleX := float64(cols*2) / float64(dx)
+	scaleY := float64(rows*4) / float64(dy)
+
+	if scaleX < scale {
+		scale = scaleX
+	}
+	if scaleY < scale {
+		scale = scaleY
+	}
+
+	return scale
+}
+
+func (p *PreProcessor) terminalDimensions() (int, int) {
+	var cols, rows int
+
+	if terminal.IsTerminal(int(os.Stdout.Fd())) {
+		tw, th, err := terminal.GetSize(int(os.Stdout.Fd()))
+		if err == nil {
+			th -= 1 // Accounts for the terminal prompt
+			if cols == 0 {
+				cols = tw
+			}
+			if rows == 0 {
+				rows = th
+			}
+		}
+	}
+
+	// Small, but fairly standard defaults
+	if cols == 0 {
+		cols = 80
+	}
+	if rows == 0 {
+		rows = 25
+	}
+
+	return cols, rows
+}
+
+type Filter struct {
+	// Gamma less than 0 darkens the image and GAMMA greater than 0 lightens it.
+	Gamma float64
+	// Brightness = -100 gives solid black image. Brightness = 100 gives solid white image.
+	Brightness float64
+	// Contrast = -100 gives solid grey image. Contrast = 100 gives maximum contrast.
+	Contrast float64
+	// Sharpen greater than 0 sharpens the image.
+	Sharpen float64
+	// Inverts pixel color. Transparent pixels remain transparent.
+	Invert bool
+	// Mirror flips the image on it's vertical axis
+	Mirror bool
+	// Drawer is the algorithm used for drawing the image into a monochrome palette
+	Drawer draw.Drawer
+}
+
+func (f Filter) Filter(img image.Image) image.Image {
+	// Adjust
+	if f.Gamma != 0 {
+		img = imaging.AdjustGamma(img, f.Gamma+1.0)
+	}
+	if f.Brightness != 0 {
+		img = imaging.AdjustBrightness(img, f.Brightness)
+	}
+	if f.Sharpen != 0 {
+		img = imaging.Sharpen(img, f.Sharpen)
+	}
+	if f.Contrast != 0 {
+		img = imaging.AdjustContrast(img, f.Contrast)
+	}
+	if f.Mirror {
+		img = imaging.FlipH(img)
+	}
+	if f.Invert {
+		img = imaging.Invert(img)
+	}
+
+	// Resize
+	cols, rows := terminalDimensions()
+	dx, dy := img.Bounds().Dx(), img.Bounds().Dy()
+	scale := scalar(dx, dy, cols, rows)
+	if scale >= 1.0 {
+		return img
+	}
+	width := uint(scale * float64(dx))
+	height := uint(scale * float64(dy))
+	return resize.Resize(width, height, img, resize.NearestNeighbor)
+
+	return img
+}
+
+func (f Filter) Draw(dst draw.Image, r image.Rectangle, src image.Image, sp image.Point) {
+	drawer := f.Drawer
+	if f.Drawer == nil {
+		drawer = draw.FloydSteinberg
+	}
+	drawer.Draw(dst, r, src, sp)
+}
+
+func terminalDimensions() (int, int) {
+	var cols, rows int
+
+	if terminal.IsTerminal(int(os.Stdout.Fd())) {
+		tw, th, err := terminal.GetSize(int(os.Stdout.Fd()))
+		if err == nil {
+			th -= 1 // Accounts for the terminal prompt
+			if cols == 0 {
+				cols = tw
+			}
+			if rows == 0 {
+				rows = th
+			}
+		}
+	}
+
+	// Small, but fairly standard defaults
+	if cols == 0 {
+		cols = 80
+	}
+	if rows == 0 {
+		rows = 25
+	}
+
+	return cols, rows
+}
+
+func scalar(dx, dy int, cols, rows int) float64 {
+	scale := float64(1.0)
+	scaleX := float64(cols*2) / float64(dx)
+	scaleY := float64(rows*4) / float64(dy)
+
+	if scaleX < scale {
+		scale = scaleX
+	}
+	if scaleY < scale {
+		scale = scaleY
+	}
+
+	return scale
 }
