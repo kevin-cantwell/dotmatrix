@@ -13,22 +13,14 @@ import (
 )
 
 type GIFAnimator struct {
-	e *Encoder
-	t Terminal
+	w io.Writer
+	c Config
 }
 
-func NewGIFAnimator(w io.Writer, f Filter, t Terminal) *GIFAnimator {
-	if f == nil {
-		f = diffuseFilter{}
-	}
-	if t == nil {
-		t = &Xterm{
-			Writer: w,
-		}
-	}
+func NewGIFAnimator(w io.Writer, c *Config) *GIFAnimator {
 	return &GIFAnimator{
-		e: NewEncoder(w, f),
-		t: t,
+		w: w,
+		c: mergeConfig(c),
 	}
 }
 
@@ -40,8 +32,8 @@ func (a *GIFAnimator) Animate(giff *gif.GIF) error {
 		return nil
 	}
 
-	a.t.ShowCursor(false)
-	defer a.t.ShowCursor(true)
+	showCursor(a.w, false)
+	defer showCursor(a.w, true)
 	go a.handleInterrupt()
 
 	// Only used if we see background disposal methods
@@ -51,72 +43,54 @@ func (a *GIFAnimator) Animate(giff *gif.GIF) error {
 	}
 
 	// The screen is what we flush to the writer on each iteration
-	var screen *image.Paletted
+	screen := redraw(image.NewPaletted(giff.Image[0].Bounds(), bgPallette), a.c.Filter, a.c.Drawer)
+	rows := giff.Config.Height / 4
+	if giff.Config.Height%4 != 0 {
+		rows++
+	}
 
 	for c := 0; giff.LoopCount == 0 || c < giff.LoopCount; c++ {
 		for i := 0; i < len(giff.Image); i++ {
 			delay := time.After(time.Duration(giff.Delay[i]) * time.Second / 100)
-			frame := convertToMonochrome(a.e.f, giff.Image[i])
 
-			// Always draw the first frame from scratch
-			if i == 0 {
-				screen = convertToMonochrome(a.e.f, image.NewPaletted(frame.Bounds(), bgPallette))
-			}
+			frame := redraw(giff.Image[i], a.c.Filter, a.c.Drawer)
 
 			switch giff.Disposal[i] {
-
-			// Dispose previous essentially means draw then undo
-			case gif.DisposalPrevious:
+			case gif.DisposalPrevious: // Dispose previous essentially means draw then undo
 				temp := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(temp.Pix, screen.Pix)
 
-				drawOver(screen, frame)
-				if err := a.flush(screen); err != nil {
+				a.drawOver(screen, frame)
+				if err := flushBraille(a.w, screen); err != nil {
 					return err
 				}
 				<-delay
 
 				screen = temp
-
-			// Dispose background replaces everything just drawn with the background canvas
-			case gif.DisposalBackground:
-				background := convertToMonochrome(a.e.f, image.NewPaletted(frame.Bounds(), bgPallette))
-				drawExact(screen, background)
+			case gif.DisposalBackground: // Dispose background replaces everything just drawn with the background canvas
+				background := redraw(image.NewPaletted(frame.Bounds(), bgPallette), a.c.Filter, a.c.Drawer)
+				a.drawExact(screen, background)
 				temp := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(temp.Pix, screen.Pix)
 
-				drawOver(screen, frame)
-				if err := a.flush(screen); err != nil {
+				a.drawOver(screen, frame)
+				if err := flushBraille(a.w, screen); err != nil {
 					return err
 				}
 				<-delay
 
 				screen = temp
-
-			// Dispose none or undefined means we just draw what we got over top
-			default:
-				drawOver(screen, frame)
-				if err := a.flush(screen); err != nil {
+			default: // Dispose none or undefined means we just draw what we got over top
+				a.drawOver(screen, frame)
+				if err := flushBraille(a.w, screen); err != nil {
 					return err
 				}
 				<-delay
 			}
+
+			resetCursor(a.w, rows)
 		}
 	}
-	return nil
-}
-
-func (a *GIFAnimator) flush(img image.Image) error {
-	if err := a.e.Encode(img); err != nil {
-		return err
-	}
-
-	rows := img.Bounds().Dy() / 4
-	if img.Bounds().Dy()%4 != 0 {
-		rows++
-	}
-	a.t.ResetCursor(rows)
-
 	return nil
 }
 
@@ -125,7 +99,7 @@ func (a *GIFAnimator) handleInterrupt() {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		s := <-signals
-		a.t.ShowCursor(true)
+		showCursor(a.w, true)
 		// Stop notifying this channel
 		signal.Stop(signals)
 		// All Signals returned by the signal package should be of type syscall.Signal
@@ -140,7 +114,7 @@ func (a *GIFAnimator) handleInterrupt() {
 }
 
 // Draws any non-transparent pixels into target
-func drawOver(target *image.Paletted, source image.Image) {
+func (a *GIFAnimator) drawOver(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -154,11 +128,24 @@ func drawOver(target *image.Paletted, source image.Image) {
 }
 
 // Draws pixels into target, including transparent ones.
-func drawExact(target *image.Paletted, source image.Image) {
+func (a *GIFAnimator) drawExact(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			target.Set(x, y, source.At(x, y))
 		}
+	}
+}
+
+// Move the cursor to the beginning of the line and up rows
+func resetCursor(w io.Writer, rows int) {
+	w.Write([]byte(fmt.Sprintf("\033[999D\033[%dA", rows)))
+}
+
+func showCursor(w io.Writer, show bool) {
+	if show {
+		w.Write([]byte("\033[?12l\033[?25h"))
+	} else {
+		w.Write([]byte("\033[?25l"))
 	}
 }

@@ -45,39 +45,57 @@ func (b Braille) String() string {
 	return string(b.Rune())
 }
 
-// Filter is a draw.Drawer that can alter an image via the Filter method.
+// Filter may alter an image in any way, including resizing it.
+// It is applied prior to drawing the image in the dotmatrix palette.
 type Filter interface {
-	draw.Drawer
 	Filter(image.Image) image.Image
 }
 
-type diffuseFilter struct{}
+type noop struct{}
 
-func (diffuseFilter) Filter(img image.Image) image.Image {
+func (noop) Filter(img image.Image) image.Image {
 	return img
 }
 
-func (diffuseFilter) Draw(dst draw.Image, r image.Rectangle, src image.Image, sp image.Point) {
-	draw.FloydSteinberg.Draw(dst, r, src, sp)
+type Config struct {
+	Filter Filter
+	Drawer draw.Drawer
 }
+
+var defaultConfig = Config{
+	Filter: noop{},
+	Drawer: draw.FloydSteinberg,
+}
+
+func mergeConfig(c *Config) Config {
+	if c == nil {
+		return defaultConfig
+	}
+	if c.Filter == nil {
+		c.Filter = defaultConfig.Filter
+	}
+	if c.Drawer == nil {
+		c.Drawer = defaultConfig.Drawer
+	}
+	return *c
+}
+
+var defaultPalette = []color.Color{color.Black, color.White, color.Transparent}
 
 type Encoder struct {
 	w io.Writer
-	f Filter
+	c Config
 }
 
 func Encode(w io.Writer, img image.Image) error {
-	return NewEncoder(w, nil).Encode(img)
+	return NewEncoder(w, &defaultConfig).Encode(img)
 }
 
 // NewEncoder provides an Encoder. If drawer is nil, draw.FloydSteinberg is used.
-func NewEncoder(w io.Writer, f Filter) *Encoder {
-	if f == nil {
-		f = diffuseFilter{}
-	}
+func NewEncoder(w io.Writer, c *Config) *Encoder {
 	return &Encoder{
 		w: w,
-		f: f,
+		c: mergeConfig(c),
 	}
 }
 
@@ -122,15 +140,37 @@ As an example, this output was encoded from a 134px by 108px image of Saturn:
 	⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
 */
 func (enc *Encoder) Encode(img image.Image) error {
-	// Filter and Draw the image
-	img = enc.redraw(img)
-	// converted := convertToMonochrome(enc.d, img)
-	bounds := img.Bounds()
+	img = redraw(img, enc.c.Filter, enc.c.Drawer)
+	return flushBraille(enc.w, img)
+}
 
+func redraw(img image.Image, filter Filter, drawer draw.Drawer) *image.Paletted {
+	origBounds := img.Bounds()
+
+	img = filter.Filter(img)
+
+	newBounds := img.Bounds()
+
+	scaleX := float64(newBounds.Dx()) / float64(origBounds.Dx())
+	scaleY := float64(newBounds.Dy()) / float64(origBounds.Dy())
+
+	// The offset is important because not all images have bounds starting at (0, 0), and
+	// the filter may accidentally zero the min bounding point.
+	offset := image.Pt(int(float64(origBounds.Min.X)*scaleX), int(float64(origBounds.Min.Y)*scaleY))
+
+	// Create a new paletted image using a monochrome+transparent color palette.
+	paletted := image.NewPaletted(img.Bounds(), defaultPalette)
+	paletted.Rect = paletted.Bounds().Add(offset)
+	drawer.Draw(paletted, paletted.Bounds(), img, img.Bounds().Min)
+	return paletted
+}
+
+func flushBraille(w io.Writer, img image.Image) error {
 	// An image's bounds do not necessarily start at (0, 0), so the two loops start
 	// at bounds.Min.Y and bounds.Min.X.
 	// Looping over Y first and X second is more likely to result in better memory
 	// access patterns than X first and Y second.
+	bounds := img.Bounds()
 	for py := bounds.Min.Y; py < bounds.Max.Y; py += 4 {
 		for px := bounds.Min.X; px < bounds.Max.X; px += 2 {
 			var b Braille
@@ -140,36 +180,19 @@ func (enc *Encoder) Encode(img image.Image) error {
 					if px+x >= bounds.Max.X || py+y >= bounds.Max.Y {
 						continue
 					}
-					// Always bet on black
+					// Always bet on black!
 					if img.At(px+x, py+y) == color.Black {
 						b[x][y] = 1
 					}
 				}
 			}
-			if _, err := enc.w.Write([]byte(b.String())); err != nil {
+			if _, err := w.Write([]byte(b.String())); err != nil {
 				return err
 			}
 		}
-		if _, err := enc.w.Write([]byte{'\n'}); err != nil {
+		if _, err := w.Write([]byte{'\n'}); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-var defaultPalette = []color.Color{color.Black, color.White, color.Transparent}
-
-func (enc *Encoder) redraw(img image.Image) *image.Paletted {
-	img = enc.f.Filter(img)
-	// Create a new paletted image using a monochrome+transparent color palette.
-	paletted := image.NewPaletted(img.Bounds(), defaultPalette)
-	enc.f.Draw(paletted, paletted.Bounds(), img, img.Bounds().Min)
-	return paletted
-}
-
-func convertToMonochrome(drawer draw.Drawer, img image.Image) *image.Paletted {
-	// Create a new paletted image using a monochrome+transparent color palette.
-	paletted := image.NewPaletted(img.Bounds(), defaultPalette)
-	drawer.Draw(paletted, paletted.Bounds(), img, img.Bounds().Min)
-	return paletted
 }

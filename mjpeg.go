@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/draw"
 	"image/jpeg"
 	"io"
 	"os"
@@ -15,35 +14,36 @@ import (
 
 type MJPEGAnimator struct {
 	w io.Writer
-	d draw.Drawer
-	t Terminal
+	c Config
 }
 
-func NewMJPEGAnimator(w io.Writer, d draw.Drawer, t Terminal) *MJPEGAnimator {
-	if t == nil {
-		t = &Xterm{
-			Writer: w,
-		}
-	}
-	if d == nil {
-		d = draw.FloydSteinberg
-	}
+func NewMJPEGAnimator(w io.Writer, c *Config) *MJPEGAnimator {
 	return &MJPEGAnimator{
 		w: w,
-		d: d,
-		t: t,
+		c: mergeConfig(c),
 	}
 }
+
+// type mjpegFilter struct {
+// 	d draw.Drawer
+// 	f func(image.Image) image.Image
+// }
+
+// func (f mjpegFilter) Filter(img image.Image) image.Image {
+// 	return f(img)
+// }
+
+// func (f mjpegFilter) Draw(dst draw.Image, r image.Rectangle, src image.Image, sp image.Point) {
+// 	f.d.Draw(dst, r, src, sp)
+// }
 
 /*
 	Animate animates an mpeg stream
 */
 func (a *MJPEGAnimator) Animate(r io.Reader, fps int) error {
-	a.t.ShowCursor(false)
-	defer a.t.ShowCursor(true)
+	showCursor(a.w, false)
+	defer showCursor(a.w, true)
 	go a.handleInterrupt()
-
-	enc := NewEncoder(a.w, nil)
 
 	reader := MJPEGReader{Reader: r}
 	for frame := range reader.ReadAll() {
@@ -53,15 +53,18 @@ func (a *MJPEGAnimator) Animate(r io.Reader, fps int) error {
 
 		delay := time.After(time.Second / time.Duration(fps))
 
+		frame.img = redraw(frame.img, a.c.Filter, a.c.Drawer)
+
 		// Draw the image and reset the cursor
-		if err := enc.Encode(frame.img); err != nil {
+		if err := flushBraille(a.w, frame.img); err != nil {
 			return err
 		}
 		rows := frame.img.Bounds().Dy() / 4
 		if frame.img.Bounds().Dy()%4 != 0 {
 			rows++
 		}
-		a.t.ResetCursor(rows)
+
+		resetCursor(a.w, rows)
 
 		<-delay
 	}
@@ -74,7 +77,7 @@ func (a *MJPEGAnimator) handleInterrupt() {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		s := <-signals
-		a.t.ShowCursor(true)
+		showCursor(a.w, true)
 		// Stop notifying this channel
 		signal.Stop(signals)
 		// All Signals returned by the signal package should be of type syscall.Signal
