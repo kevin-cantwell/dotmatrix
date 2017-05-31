@@ -61,10 +61,6 @@
 
 [[dependencies]]
   branch = "master"
-  name = "github.com/golang/freetype"
-
-[[dependencies]]
-  branch = "master"
   name = "github.com/nfnt/resize"
 
 [[dependencies]]
@@ -85,4 +81,6 @@
 
 [[dependencies]]
   branch = "master"
-  name = "golang.org/x/net"
+  name = "golang.org/x/text"
+
+

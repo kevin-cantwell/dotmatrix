@@ -1,4 +1,4 @@
-memo = "b3453ba1f0709a8e864200b3446cf81ca42c6070c6eb6162da03f8573a7103c7"
+memo = "3497faccbeedc1c79a8a1250342eb551532ae8a64a5f601fbb3bbace76b83b5d"
 
 [[projects]]
   branch = "master"
@@ -11,12 +11,6 @@ memo = "b3453ba1f0709a8e864200b3446cf81ca42c6070c6eb6162da03f8573a7103c7"
   name = "github.com/disintegration/imaging"
   packages = ["."]
   revision = "d8bbae1de109b518dabc98c6c1633eb358c148a4"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/golang/freetype"
-  packages = [".","raster","truetype"]
-  revision = "bcfeb16b74e8aea9e2fe043406f2ef74b1cb0759"
 
 [[projects]]
   branch = "master"
@@ -45,20 +39,21 @@ memo = "b3453ba1f0709a8e864200b3446cf81ca42c6070c6eb6162da03f8573a7103c7"
 [[projects]]
   branch = "master"
   name = "golang.org/x/image"
-  packages = ["bmp","font","font/basicfont","font/plan9font","math/fixed","tiff","tiff/lzw"]
+  packages = ["bmp","tiff","tiff/lzw"]
   revision = "f483456c9f61fd7c1e170033d58ef22ff5ffe291"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/net"
-  packages = ["context"]
-  revision = "906cda9512f77671ab44f8c8563b13a8e707b230"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
   revision = "d75a52659825e75fff6158388dddc6a5b04f9ba5"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/text"
+  packages = ["unix"]
+  revision = "4ee4af566555f5fbe026368b75596286a312663a"
+
 
 [[projects]]
   branch = "master"
