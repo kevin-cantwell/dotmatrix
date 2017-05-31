@@ -12,29 +12,29 @@ import (
 	"time"
 )
 
-type GIFAnimator struct {
+type GIFPrinter struct {
 	w io.Writer
 	c Config
 }
 
-func NewGIFAnimator(w io.Writer, c *Config) *GIFAnimator {
-	return &GIFAnimator{
+func NewGIFPrinter(w io.Writer, c *Config) *GIFPrinter {
+	return &GIFPrinter{
 		w: w,
 		c: mergeConfig(c),
 	}
 }
 
 /*
-	Animate animates a gif
+	Print animates a gif
 */
-func (a *GIFAnimator) Animate(giff *gif.GIF) error {
+func (p *GIFPrinter) Print(giff *gif.GIF) error {
 	if len(giff.Image) < 1 {
 		return nil
 	}
 
-	showCursor(a.w, false)
-	defer showCursor(a.w, true)
-	go a.handleInterrupt()
+	showCursor(p.w, false)
+	defer showCursor(p.w, true)
+	go p.handleInterrupt()
 
 	// Only used if we see background disposal methods
 	bgPallette := []color.Color{color.Transparent}
@@ -43,7 +43,7 @@ func (a *GIFAnimator) Animate(giff *gif.GIF) error {
 	}
 
 	// The screen is what we flush to the writer on each iteration
-	screen := redraw(image.NewPaletted(giff.Image[0].Bounds(), bgPallette), a.c.Filter, a.c.Drawer)
+	screen := redraw(image.NewPaletted(giff.Image[0].Bounds(), bgPallette), p.c.Filter, p.c.Drawer)
 	rows := giff.Config.Height / 4
 	if giff.Config.Height%4 != 0 {
 		rows++
@@ -53,53 +53,53 @@ func (a *GIFAnimator) Animate(giff *gif.GIF) error {
 		for i := 0; i < len(giff.Image); i++ {
 			delay := time.After(time.Duration(giff.Delay[i]) * time.Second / 100)
 
-			frame := redraw(giff.Image[i], a.c.Filter, a.c.Drawer)
+			frame := redraw(giff.Image[i], p.c.Filter, p.c.Drawer)
 
 			switch giff.Disposal[i] {
 			case gif.DisposalPrevious: // Dispose previous essentially means draw then undo
 				temp := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(temp.Pix, screen.Pix)
 
-				a.drawOver(screen, frame)
-				if err := flushBraille(a.w, screen); err != nil {
+				p.drawOver(screen, frame)
+				if err := flushBraille(p.w, screen); err != nil {
 					return err
 				}
 				<-delay
 
 				screen = temp
 			case gif.DisposalBackground: // Dispose background replaces everything just drawn with the background canvas
-				background := redraw(image.NewPaletted(frame.Bounds(), bgPallette), a.c.Filter, a.c.Drawer)
-				a.drawExact(screen, background)
+				background := redraw(image.NewPaletted(frame.Bounds(), bgPallette), p.c.Filter, p.c.Drawer)
+				p.drawExact(screen, background)
 				temp := image.NewPaletted(screen.Bounds(), screen.Palette)
 				copy(temp.Pix, screen.Pix)
 
-				a.drawOver(screen, frame)
-				if err := flushBraille(a.w, screen); err != nil {
+				p.drawOver(screen, frame)
+				if err := flushBraille(p.w, screen); err != nil {
 					return err
 				}
 				<-delay
 
 				screen = temp
 			default: // Dispose none or undefined means we just draw what we got over top
-				a.drawOver(screen, frame)
-				if err := flushBraille(a.w, screen); err != nil {
+				p.drawOver(screen, frame)
+				if err := flushBraille(p.w, screen); err != nil {
 					return err
 				}
 				<-delay
 			}
 
-			resetCursor(a.w, rows)
+			resetCursor(p.w, rows)
 		}
 	}
 	return nil
 }
 
-func (a *GIFAnimator) handleInterrupt() {
+func (p *GIFPrinter) handleInterrupt() {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		s := <-signals
-		showCursor(a.w, true)
+		showCursor(p.w, true)
 		// Stop notifying this channel
 		signal.Stop(signals)
 		// All Signals returned by the signal package should be of type syscall.Signal
@@ -114,7 +114,7 @@ func (a *GIFAnimator) handleInterrupt() {
 }
 
 // Draws any non-transparent pixels into target
-func (a *GIFAnimator) drawOver(target *image.Paletted, source image.Image) {
+func (p *GIFPrinter) drawOver(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -128,7 +128,7 @@ func (a *GIFAnimator) drawOver(target *image.Paletted, source image.Image) {
 }
 
 // Draws pixels into target, including transparent ones.
-func (a *GIFAnimator) drawExact(target *image.Paletted, source image.Image) {
+func (p *GIFPrinter) drawExact(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {

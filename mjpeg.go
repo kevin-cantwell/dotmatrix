@@ -12,46 +12,36 @@ import (
 	"time"
 )
 
-type MJPEGAnimator struct {
+type MJPEGPrinter struct {
 	w io.Writer
 	c Config
 }
 
-func NewMJPEGAnimator(w io.Writer, c *Config) *MJPEGAnimator {
-	return &MJPEGAnimator{
+func NewMJPEGPrinter(w io.Writer, c *Config) *MJPEGPrinter {
+	return &MJPEGPrinter{
 		w: w,
 		c: mergeConfig(c),
 	}
 }
 
-// type mjpegFilter struct {
-// 	d draw.Drawer
-// 	f func(image.Image) image.Image
-// }
-
-// func (f mjpegFilter) Filter(img image.Image) image.Image {
-// 	return f(img)
-// }
-
-// func (f mjpegFilter) Draw(dst draw.Image, r image.Rectangle, src image.Image, sp image.Point) {
-// 	f.d.Draw(dst, r, src, sp)
-// }
-
 /*
-	Animate animates an mpeg stream
+	Print animates an mpeg stream. If fps is less than zero, it will print each
+	frame as quickly as it can. Otherwise, fps dictacts how many frames per second
+	are printed.
 */
-func (a *MJPEGAnimator) Animate(r io.Reader, fps int) error {
+func (a *MJPEGPrinter) Print(r io.Reader, fps int) error {
 	showCursor(a.w, false)
 	defer showCursor(a.w, true)
 	go a.handleInterrupt()
 
-	reader := MJPEGReader{Reader: r}
+	reader := mjpegStreamer{
+		r:   r,
+		fps: fps,
+	}
 	for frame := range reader.ReadAll() {
 		if frame.err != nil {
 			return frame.err
 		}
-
-		delay := time.After(time.Second / time.Duration(fps))
 
 		frame.img = redraw(frame.img, a.c.Filter, a.c.Drawer)
 
@@ -65,14 +55,12 @@ func (a *MJPEGAnimator) Animate(r io.Reader, fps int) error {
 		}
 
 		resetCursor(a.w, rows)
-
-		<-delay
 	}
 
 	return nil
 }
 
-func (a *MJPEGAnimator) handleInterrupt() {
+func (a *MJPEGPrinter) handleInterrupt() {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
@@ -91,72 +79,17 @@ func (a *MJPEGAnimator) handleInterrupt() {
 	}()
 }
 
-/*
-	PlayMJPEG is an experimental function that will draw each frame of an MJPEG
-	stream to the given writer (usually os.Stdout). Terminal codes are used to
-	reposition the cursor at the beginning of each frame.
-*/
-// func PlayMJPEG(w io.Writer, r io.Reader, fps int) error {
-// 	width, height, err := getTerminalSize()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	height -= 4
-
-// 	w.Write([]byte("\033[?25l"))                // Hide cursor
-// 	defer w.Write([]byte("\033[?12l\033[?25h")) // Show cursor
-
-// 	signals := make(chan os.Signal)
-// 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-// 	go func() {
-// 		s := <-signals
-// 		w.Write([]byte("\033[?12l\033[?25h")) // Show cursor
-// 		// Stop notifying this channel
-// 		signal.Stop(signals)
-// 		// All Signals returned by the signal package should be of type syscall.Signal
-// 		if signum, ok := s.(syscall.Signal); ok {
-// 			syscall.Kill(syscall.Getpid(), signum)
-// 		} else {
-// 			panic(fmt.Sprintf("unexpected signal: %v", s))
-// 		}
-// 	}()
-
-// 	mjpegs := NewMJPEGScanner(r)
-// 	// for range time.Tick(time.Second / time.Duration(fps)) {
-// 	// 	if !mjpegs.Scan() {
-// 	// 		break
-// 	// 	}
-// 	ticker := time.Tick(time.Second / time.Duration(fps))
-// 	for mjpegs.Scan(ticker) {
-// 		img := mjpegs.Image()
-// 		img = resize.Resize(uint(width), uint(height), img, resize.NearestNeighbor)
-// 		img = imaging.Invert(img)
-// 		img = imaging.FlipH(img)
-// 		if err := flush(w, img); err != nil {
-// 			return err
-// 		}
-// 		select {
-// 		case <-ticker:
-// 		default:
-// 		}
-// 	}
-// 	return mjpegs.Err()
-// }
-
-// func flush(w io.Writer, img image.Image) error {
-// 	return nil
-// }
-
 type frame struct {
 	img image.Image
 	err error
 }
 
-type MJPEGReader struct {
-	Reader io.Reader
+type mjpegStreamer struct {
+	r   io.Reader
+	fps int
 }
 
-func (mjpeg *MJPEGReader) ReadAll() <-chan frame {
+func (mjpeg *mjpegStreamer) ReadAll() <-chan frame {
 	frames := make(chan frame)
 	go func() {
 		defer close(frames)
@@ -164,7 +97,9 @@ func (mjpeg *MJPEGReader) ReadAll() <-chan frame {
 		var buf bytes.Buffer
 		p := make([]byte, 1)
 		for {
-			n, err := mjpeg.Reader.Read(p)
+			delay := time.After(time.Second / time.Duration(mjpeg.fps))
+
+			n, err := mjpeg.r.Read(p)
 			if n == 0 {
 				if err == nil {
 					continue
@@ -193,69 +128,10 @@ func (mjpeg *MJPEGReader) ReadAll() <-chan frame {
 					default:
 						buf.Truncate(0)
 					}
+					<-delay
 				}
 			}
 		}
 	}()
 	return frames
 }
-
-// type MJPEGScanner struct {
-// 	rdr io.Reader
-// 	img image.Image
-// 	err error
-// }
-
-// func NewMJPEGScanner(r io.Reader) *MJPEGScanner {
-// 	return &MJPEGScanner{
-// 		rdr: r,
-// 	}
-// }
-
-// func (s *MJPEGScanner) Scan(ticker <-chan time.Time) bool {
-// 	p := make([]byte, 1)
-// 	var buf bytes.Buffer
-// 	for {
-// 		n, err := s.rdr.Read(p)
-// 		if n == 0 {
-// 			if err == nil {
-// 				continue
-// 			}
-// 			if err != io.EOF {
-// 				s.err = err
-// 			}
-// 			return false
-// 		}
-
-// 		if _, err := buf.Write(p); err != nil {
-// 			s.err = err
-// 			return false
-// 		}
-
-// 		if buf.Len() > 1 {
-// 			data := buf.Bytes()
-// 			if data[buf.Len()-2] == 0xff && data[buf.Len()-1] == 0xd9 {
-// 				select {
-// 				case <-ticker:
-// 					img, err := jpeg.Decode(&buf)
-// 					if err != nil {
-// 						s.err = err
-// 						return false
-// 					}
-// 					s.img = img
-// 					return true
-// 				default:
-// 					buf.Truncate(0)
-// 				}
-// 			}
-// 		}
-// 	}
-// }
-
-// func (s *MJPEGScanner) Err() error {
-// 	return s.err
-// }
-
-// func (s *MJPEGScanner) Image() image.Image {
-// 	return s.img
-// }

@@ -82,35 +82,35 @@ func mergeConfig(c *Config) Config {
 
 var defaultPalette = []color.Color{color.Black, color.White, color.Transparent}
 
-type Encoder struct {
+type Printer struct {
 	w io.Writer
 	c Config
 }
 
-func Encode(w io.Writer, img image.Image) error {
-	return NewEncoder(w, &defaultConfig).Encode(img)
+func Print(w io.Writer, img image.Image) error {
+	return NewPrinter(w, &defaultConfig).Print(img)
 }
 
-// NewEncoder provides an Encoder. If drawer is nil, draw.FloydSteinberg is used.
-func NewEncoder(w io.Writer, c *Config) *Encoder {
-	return &Encoder{
+// NewPrinter provides an Printer. If drawer is nil, draw.FloydSteinberg is used.
+func NewPrinter(w io.Writer, c *Config) *Printer {
+	return &Printer{
 		w: w,
 		c: mergeConfig(c),
 	}
 }
 
 /*
-Encode encodes the image as a series of braille and line feed characters and writes
+Print prints the image as a series of braille and line feed characters and writes
 to w. Braille symbols are useful for representing monochrome images
 because any 2x4 pixel area can be represented by one of unicode's
 256 braille symbols. See: https://en.wikipedia.org/wiki/Braille_Patterns
 
 Each pixel of the image is converted to either black or white by redrawing the
-image using the encoder's drawer (Floyd Steinberg diffusion, by default) and a
+image using the printer's drawer (Floyd Steinberg diffusion, by default) and a
 3-color palette of black, white, and transparent. Finally, each 2x4 pixel block
-is encoded as a braille symbol.
+is printed as a braille symbol.
 
-As an example, this output was encoded from a 134px by 108px image of Saturn:
+As an example, this output was printed from a 134px by 108px image of Saturn:
 	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡿⡻⡫⡫⡣⣣⢣⢇⢧⢫⢻⣿⣿⣿⣿
@@ -139,7 +139,7 @@ As an example, this output was encoded from a 134px by 108px image of Saturn:
 	⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 	⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿
 */
-func (enc *Encoder) Encode(img image.Image) error {
+func (enc *Printer) Print(img image.Image) error {
 	img = redraw(img, enc.c.Filter, enc.c.Drawer)
 	return flushBraille(enc.w, img)
 }

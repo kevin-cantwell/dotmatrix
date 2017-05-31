@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"bufio"
 	"fmt"
 	"image"
 	"image/draw"
@@ -34,7 +34,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "invert,i",
-			Usage: "Inverts image color.",
+			Usage: "Inverts image color. Useful for black background terminals",
 		},
 		cli.Float64Flag{
 			Name:  "gamma,g",
@@ -59,58 +59,36 @@ func main() {
 			Name:  "mirror,m",
 			Usage: "Mirrors the image.",
 		},
-		cli.BoolFlag{
-			Name:  "camera,cam",
-			Usage: "Use FaceTime camera input (Requires ffmpeg+avfoundation).",
-		},
-		cli.BoolFlag{
-			Name:  "video,vid",
-			Usage: "Use video input (Requires ffmpeg).",
+		cli.StringFlag{
+			Name:  "format,f",
+			Usage: "Input format type ('gif', 'mjpeg', etc.).",
 		},
 		cli.BoolFlag{
 			Name:  "mono",
-			Usage: "If specified, image is drawn without Floyd Steinberg diffusion",
+			Usage: "Images are drawn without Floyd Steinberg diffusion.",
+		},
+		cli.BoolFlag{
+			Name:  "motion,mjpeg",
+			Usage: "Interpret input as an mjpeg stream, such as from a webcam.",
 		},
 	}
 	app.Action = func(c *cli.Context) error {
-		reader, mediaType, err := decodeReader(c)
+		reader, mimeType, err := decodeReader(c)
 		if err != nil {
 			return err
 		}
-		defer reader.Close()
 
-		config := &dotmatrix.Config{
-			Filter: &Filter{
-				Gamma:      c.Float64("gamma"),
-				Brightness: c.Float64("brightness"),
-				Contrast:   c.Float64("contrast"),
-				Sharpen:    c.Float64("sharpen"),
-				Invert:     c.Bool("invert"),
-				Mirror:     c.Bool("mirror"),
-			},
-			Drawer: func() draw.Drawer {
-				if c.Bool("mono") {
-					return draw.Src
-				}
-				return draw.FloydSteinberg
-			}(),
+		if c.Bool("motion") {
+			return mjpegAction(c, reader, -1)
 		}
 
-		switch mediaType {
-		case "mjpeg":
-			return dotmatrix.NewMJPEGAnimator(os.Stdout, config).Animate(reader, 30)
-		case "gif":
-			giff, err := gif.DecodeAll(reader)
-			if err != nil {
-				return err
-			}
-			return dotmatrix.NewGIFAnimator(os.Stdout, config).Animate(giff)
+		switch mimeType {
+		// case "video/mp4", "video/avi", "video/webm":
+		// 	return videoAction(c, reader)
+		case "image/gif":
+			return gifAction(c, reader)
 		default:
-			img, _, err := image.Decode(reader)
-			if err != nil {
-				return err
-			}
-			return dotmatrix.NewEncoder(os.Stdout, config).Encode(img)
+			return imageAction(c, reader)
 		}
 	}
 
@@ -119,54 +97,115 @@ func main() {
 	}
 }
 
-func decodeReader(c *cli.Context) (io.ReadCloser, string, error) {
-	// Are we reading from isight?
-	if c.Bool("camera") {
-		cmd := exec.Command("ffmpeg", "-r", "30", "-f", "avfoundation", "-i", "FaceTime", "-f", "mjpeg", "-loglevel", "panic", "pipe:")
-		stdoutPipe, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, "", err
-		}
-		if err := cmd.Start(); err != nil {
-			return nil, "", err
-		}
-		go func() {
-			if err := cmd.Wait(); err != nil {
-				exit(err.Error(), 1)
+func config(c *cli.Context) *dotmatrix.Config {
+	return &dotmatrix.Config{
+		Filter: &Filter{
+			Gamma:      c.Float64("gamma"),
+			Brightness: c.Float64("brightness"),
+			Contrast:   c.Float64("contrast"),
+			Sharpen:    c.Float64("sharpen"),
+			Invert:     c.Bool("invert"),
+			Mirror:     c.Bool("mirror"),
+		},
+		Drawer: func() draw.Drawer {
+			if c.Bool("mono") {
+				return draw.Src
 			}
-		}()
-		return stdoutPipe, "mjpeg", nil
+			return draw.FloydSteinberg
+		}(),
 	}
+}
 
-	// Get the input argument
-	input := c.Args().First()
-	if input == "" {
-		return nil, "", errors.New("dotmatrix: no input specified")
+func imageAction(c *cli.Context, r io.Reader) error {
+	img, _, err := image.Decode(r)
+	if err != nil {
+		return err
 	}
+	return dotmatrix.NewPrinter(os.Stdout, config(c)).Print(img)
+}
 
-	// What's the media type?
-	var mediaType string
-	switch {
-	case strings.HasSuffix(strings.ToLower(input), ".gif"):
-		mediaType = "gif"
-	case strings.HasSuffix(strings.ToLower(input), ".mjpeg"):
-		mediaType = "mjpeg"
-	default:
-		mediaType = "image"
+func gifAction(c *cli.Context, r io.Reader) error {
+	giff, err := gif.DecodeAll(r)
+	if err != nil {
+		return err
 	}
+	return dotmatrix.NewGIFPrinter(os.Stdout, config(c)).Print(giff)
+}
 
-	// Is it a url?
-	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
-		if resp, err := http.Get(input); err != nil {
-			return nil, "", err
+func mjpegAction(c *cli.Context, r io.Reader, fps int) error {
+	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(r, fps)
+}
+
+func videoAction(c *cli.Context, r io.Reader) error {
+	fmt.Println("ffmpeg", "-i", "pipe:0", "-f", "mjpeg", "-r", "15", "-loglevel", "error", "pipe:1")
+	cmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "mjpeg", "-r", "15", "-loglevel", "error", "pipe:1")
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = r
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			exit(err.Error(), 1)
+		}
+	}()
+
+	return mjpegAction(c, stdoutPipe, 15)
+}
+
+func cameraAction(c *cli.Context) error {
+	cmd := exec.Command("ffmpeg", "-r", "30", "-f", "avfoundation", "-i", "FaceTime", "-vf", "hflip", "-s", "640x480", "-f", "mjpeg", "-loglevel", "error", "pipe:1")
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			exit(err.Error(), 1)
+		}
+	}()
+
+	return mjpegAction(c, stdoutPipe, -1)
+}
+
+func decodeReader(c *cli.Context) (io.Reader, string, error) {
+	var reader io.Reader = os.Stdin
+
+	// Assign to reader
+	if input := c.Args().First(); input != "" {
+		// Is it a file?
+		if !strings.HasPrefix(input, "http://") && !strings.HasPrefix(input, "https://") {
+			file, err := os.Open(input)
+			if err != nil {
+				return nil, "", err
+			}
+			reader = file
 		} else {
-			return resp.Body, mediaType, nil
+			// Is it a url?
+			if resp, err := http.Get(input); err != nil {
+				return nil, "", err
+			} else {
+				reader = resp.Body
+			}
 		}
 	}
 
-	// Is it a file?
-	file, err := os.Open(input)
-	return file, mediaType, err
+	bufioReader := bufio.NewReader(reader)
+
+	peeked, err := bufioReader.Peek(512)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return bufioReader, http.DetectContentType(peeked), nil
 }
 
 type Filter struct {
