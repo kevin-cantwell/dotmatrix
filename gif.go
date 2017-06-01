@@ -44,8 +44,8 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 
 	// The screen is what we flush to the writer on each iteration
 	screen := redraw(image.NewPaletted(giff.Image[0].Bounds(), bgPallette), p.c.Filter, p.c.Drawer)
-	rows := giff.Config.Height / 4
-	if giff.Config.Height%4 != 0 {
+	rows := screen.Bounds().Dy() / 4
+	if screen.Bounds().Dy()%4 != 0 {
 		rows++
 	}
 

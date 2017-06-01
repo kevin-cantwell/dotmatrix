@@ -71,6 +71,11 @@ func main() {
 			Name:  "motion,mjpeg",
 			Usage: "Interpret input as an mjpeg stream, such as from a webcam.",
 		},
+		cli.IntFlag{
+			Name:  "framerate,fps",
+			Usage: "Force a framerate for mjpeg streams. Default is -1 (ie: no delay between frames).",
+			Value: -1,
+		},
 	}
 	app.Action = func(c *cli.Context) error {
 		reader, mimeType, err := decodeReader(c)
@@ -79,12 +84,14 @@ func main() {
 		}
 
 		if c.Bool("motion") {
-			return mjpegAction(c, reader, -1)
+			return mjpegAction(c, reader, c.Int("framerate"))
 		}
 
 		switch mimeType {
 		// case "video/mp4", "video/avi", "video/webm":
 		// 	return videoAction(c, reader)
+		case "video/x-motion-jpeg":
+			return mjpegAction(c, reader, c.Int("framerate"))
 		case "image/gif":
 			return gifAction(c, reader)
 		default:
@@ -205,7 +212,13 @@ func decodeReader(c *cli.Context) (io.Reader, string, error) {
 		return nil, "", err
 	}
 
-	return bufioReader, http.DetectContentType(peeked), nil
+	mimeType := http.DetectContentType(peeked)
+	// // See if it's an mjpeg stream
+	// if mimeType == "image/jpeg" {
+	// 	bufioReader.
+	// }
+
+	return bufioReader, mimeType, nil
 }
 
 type Filter struct {
