@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 
 	_ "golang.org/x/image/bmp"
@@ -84,8 +83,6 @@ func main() {
 		}
 
 		switch mimeType {
-		// case "video/mp4", "video/avi", "video/webm":
-		// 	return videoAction(c, reader)
 		case "video/x-motion-jpeg":
 			return mjpegAction(c, reader, c.Int("framerate"))
 		case "image/gif":
@@ -139,46 +136,6 @@ func mjpegAction(c *cli.Context, r io.Reader, fps int) error {
 	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(r, fps)
 }
 
-func videoAction(c *cli.Context, r io.Reader) error {
-	fmt.Println("ffmpeg", "-i", "pipe:0", "-f", "mjpeg", "-r", "15", "-loglevel", "error", "pipe:1")
-	cmd := exec.Command("ffmpeg", "-i", "pipe:0", "-f", "mjpeg", "-r", "15", "-loglevel", "error", "pipe:1")
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = r
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			exit(err.Error(), 1)
-		}
-	}()
-
-	return mjpegAction(c, stdoutPipe, 15)
-}
-
-func cameraAction(c *cli.Context) error {
-	cmd := exec.Command("ffmpeg", "-r", "30", "-f", "avfoundation", "-i", "FaceTime", "-vf", "hflip", "-s", "640x480", "-f", "mjpeg", "-loglevel", "error", "pipe:1")
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			exit(err.Error(), 1)
-		}
-	}()
-
-	return mjpegAction(c, stdoutPipe, -1)
-}
-
 func decodeReader(c *cli.Context) (io.Reader, string, error) {
 	var reader io.Reader = os.Stdin
 
@@ -209,10 +166,6 @@ func decodeReader(c *cli.Context) (io.Reader, string, error) {
 	}
 
 	mimeType := http.DetectContentType(peeked)
-	// // See if it's an mjpeg stream
-	// if mimeType == "image/jpeg" {
-	// 	bufioReader.
-	// }
 
 	return bufioReader, mimeType, nil
 }
