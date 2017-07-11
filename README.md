@@ -24,8 +24,8 @@ import (
   "github.com/kevin-cantwell/dotmatrix"
 )
 
-func encode(img image.Image) error {
-  return dotmatrix.Encode(os.Stdout, img)
+func Encode(img image.Image) error {
+  return dotmatrix.Print(os.Stdout, img)
 }
 ```
 
@@ -34,26 +34,36 @@ func encode(img image.Image) error {
 #### Installation 
 
 ```
-$ go get -u github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix
-```
+> go get -u github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix
+> dotmatrix --help
+NAME:
+   dotmatrix - A command-line tool for encoding images as unicode braille symbols.
 
-#### Usage
-
-```
 USAGE:
    1) dotmatrix [options] [file|url]
    2) dotmatrix [options] < [file]
 
+VERSION:
+   0.1.0
+
+AUTHOR:
+   Kevin Cantwell <kevin.cantwell@gmail.com>
+
+COMMANDS:
+     help, h  Shows a list of commands or help for one command
+
 GLOBAL OPTIONS:
-   --invert, -i               Inverts black and white pixels.
-   --fit W,H, -f W,H "80,25"  W,H = 80,25 scales down the image to fit a terminal size of 80 by 25.
-   --gamma, -g "0"            GAMMA less than 0 darkens the image and GAMMA greater than 0 lightens it.
-   --brightness, -b "0"       BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image.
-   --contrast, -c "0"         CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast.
-   --sharpen, -s "0"          SHARPEN greater than 0 sharpens the image.
-   --partymode, -p            Animates gifs in party mode.
-   --help, -h                 show help
-   --version, -v              print the version
+   --invert, -i                    Inverts image color. Useful for black background terminals
+   --gamma value, -g value         GAMMA less than 0 darkens the image and GAMMA greater than 0 lightens it. (default: 0)
+   --brightness value, -b value    BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image. (default: 0)
+   --contrast value, -c value      CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast. (default: 0)
+   --sharpen value, -s value       SHARPEN greater than 0 sharpens the image. (default: 0)
+   --mirror, -m                    Mirrors the image.
+   --mono                          Images are drawn without Floyd Steinberg diffusion.
+   --motion, --mjpeg               Interpret input as an mjpeg stream, such as from a webcam.
+   --framerate value, --fps value  Force a framerate for mjpeg streams. Default is -1 (ie: no delay between frames). (default: -1)
+   --help, -h                      show help
+   --version, -v                   print the version
 ```
 
 #### Examples
@@ -137,7 +147,7 @@ $ dotmatrix --sharpen 100 < face.jpg
 
 ## Internals
 
-The input image is decoded and treated with Floyd Steinberg image diffusion in order to capture gray tones in monochrome. Each pixel is then mapped to a matrix of braille unicode points and the braille symbols are written to stdout in such a way as they appear to reconstruct the image, pixel-for-pixel. Each pixel is mapped to a monochrome color (black or white) depending on a fairly standard RGB luminosity algorithm.
+The input image is decoded and treated with Floyd Steinberg image diffusion in order to capture gray tones in monochrome. Each pixel is then mapped to a matrix of braille Unicode points and the braille symbols are written to an `io.Writer` in such a way as they appear to reconstruct the image, pixel-for-pixel. Each pixel is mapped to a monochrome color (black or white) depending on a fairly standard RGB luminosity algorithm.
 
 The command-line utility determines the resolution of the output based on the number of columns in the current terminal, so if you make your terminal wider you may get a higher-resolution picture.
 
