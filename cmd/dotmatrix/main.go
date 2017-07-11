@@ -59,10 +59,6 @@ func main() {
 			Name:  "mirror,m",
 			Usage: "Mirrors the image.",
 		},
-		cli.StringFlag{
-			Name:  "format,f",
-			Usage: "Input format type ('gif', 'mjpeg', etc.).",
-		},
 		cli.BoolFlag{
 			Name:  "mono",
 			Usage: "Images are drawn without Floyd Steinberg diffusion.",
