@@ -38,6 +38,7 @@ func (a *MJPEGPrinter) Print(r io.Reader, fps int) error {
 		r:   r,
 		fps: fps,
 	}
+
 	for frame := range reader.ReadAll() {
 		if frame.err != nil {
 			return frame.err
@@ -96,9 +97,8 @@ func (mjpeg *mjpegStreamer) ReadAll() <-chan frame {
 
 		var buf bytes.Buffer
 		p := make([]byte, 1)
+		delay := time.After(time.Second / time.Duration(mjpeg.fps))
 		for {
-			delay := time.After(time.Second / time.Duration(mjpeg.fps))
-
 			n, err := mjpeg.r.Read(p)
 			if n == 0 {
 				if err == nil {
@@ -125,10 +125,11 @@ func (mjpeg *mjpegStreamer) ReadAll() <-chan frame {
 					}
 					select {
 					case frames <- frame{img: img, err: err}:
+						<-delay
 					default:
 						buf.Truncate(0)
 					}
-					<-delay
+					delay = time.After(time.Second / time.Duration(mjpeg.fps))
 				}
 			}
 		}
