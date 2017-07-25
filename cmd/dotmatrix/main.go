@@ -71,11 +71,19 @@ func main() {
 			Usage: "Force a framerate for mjpeg streams. Default is -1 (ie: no delay between frames).",
 			Value: -1,
 		},
+		cli.StringFlag{
+			Name:  "mimeType,mime",
+			Usage: "Force interpretation of a specific mime type (eg: \"image/gif\". Default is to examine the first 512 bytes and make an educated guess.",
+		},
 	}
 	app.Action = func(c *cli.Context) error {
 		reader, mimeType, err := decodeReader(c)
 		if err != nil {
 			return err
+		}
+
+		if mime := c.String("mimeType"); mime != "" {
+			mimeType = mime
 		}
 
 		if c.Bool("motion") {
