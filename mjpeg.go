@@ -29,10 +29,10 @@ func NewMJPEGPrinter(w io.Writer, c *Config) *MJPEGPrinter {
 	frame as quickly as it can. Otherwise, fps dictacts how many frames per second
 	are printed.
 */
-func (a *MJPEGPrinter) Print(r io.Reader, fps int) error {
-	showCursor(a.w, false)
-	defer showCursor(a.w, true)
-	go a.handleInterrupt()
+func (p *MJPEGPrinter) Print(r io.Reader, fps int) error {
+	showCursor(p.w, false)
+	defer showCursor(p.w, true)
+	go p.handleInterrupt()
 
 	reader := mjpegStreamer{
 		r:   r,
@@ -44,10 +44,10 @@ func (a *MJPEGPrinter) Print(r io.Reader, fps int) error {
 			return frame.err
 		}
 
-		frame.img = redraw(frame.img, a.c.Filter, a.c.Drawer)
+		frame.img = redraw(frame.img, p.c.Filter, p.c.Drawer)
 
 		// Draw the image and reset the cursor
-		if err := flushBraille(a.w, frame.img); err != nil {
+		if err := flush(p.w, frame.img, p.c.Flusher); err != nil {
 			return err
 		}
 		rows := frame.img.Bounds().Dy() / 4
@@ -55,18 +55,18 @@ func (a *MJPEGPrinter) Print(r io.Reader, fps int) error {
 			rows++
 		}
 
-		resetCursor(a.w, rows)
+		resetCursor(p.w, rows)
 	}
 
 	return nil
 }
 
-func (a *MJPEGPrinter) handleInterrupt() {
+func (p *MJPEGPrinter) handleInterrupt() {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		s := <-signals
-		showCursor(a.w, true)
+		showCursor(p.w, true)
 		// Stop notifying this channel
 		signal.Stop(signals)
 		// All Signals returned by the signal package should be of type syscall.Signal

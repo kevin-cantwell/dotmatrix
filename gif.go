@@ -61,7 +61,7 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 				copy(temp.Pix, screen.Pix)
 
 				p.drawOver(screen, frame)
-				if err := flushBraille(p.w, screen); err != nil {
+				if err := flush(p.w, screen, p.c.Flusher); err != nil {
 					return err
 				}
 				<-delay
@@ -74,7 +74,7 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 				copy(temp.Pix, screen.Pix)
 
 				p.drawOver(screen, frame)
-				if err := flushBraille(p.w, screen); err != nil {
+				if err := flush(p.w, screen, p.c.Flusher); err != nil {
 					return err
 				}
 				<-delay
@@ -82,7 +82,7 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 				screen = temp
 			default: // Dispose none or undefined means we just draw what we got over top
 				p.drawOver(screen, frame)
-				if err := flushBraille(p.w, screen); err != nil {
+				if err := flush(p.w, screen, p.c.Flusher); err != nil {
 					return err
 				}
 				<-delay
