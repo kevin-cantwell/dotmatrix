@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/draw"
 	"image/gif"
+	_ "image/jpeg"
 	_ "image/png"
 	"io"
 	"net/http"
