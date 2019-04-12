@@ -1,0 +1,15 @@
+github.com/codegangsta/cli v0.0.0-20170128213959-347a9884a873 h1:Z4B0PhzWE8yzHJSsbhR8wLEHheOmP6ebdw5R1Cj00RU=
+github.com/codegangsta/cli v0.0.0-20170128213959-347a9884a873/go.mod h1:/qJNoX69yVSKu5o4jLyXAENLRyk1uhi7zkbQ3slBdOA=
+github.com/disintegration/imaging v0.0.0-20160228073435-d8bbae1de109 h1:SR8+9H4plcUP++sH6VFzgl9jQ0ggmgwR0Ch9QepB2N4=
+github.com/disintegration/imaging v0.0.0-20160228073435-d8bbae1de109/go.mod h1:9B/deIUIrliYkyMTuXJd6OUFLcrZ2tf+3Qlwnaf/CjU=
+github.com/nfnt/resize v0.0.0-20160109112512-4d93a29130b1 h1:Gi7SMyKr6jDlZzNhBrTMD/1zFiHsd5NIQw2uAXDf3Jk=
+github.com/nfnt/resize v0.0.0-20160109112512-4d93a29130b1/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
+github.com/onsi/ginkgo v0.0.0-20160722022339-09289bfe14b6/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
+github.com/onsi/gomega v0.0.0-20160911051023-d59fa0ac68bb/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5uiA=
+golang.org/x/crypto v0.0.0-20170516161655-0fe963104e9d h1:qjfFh1YMn6m60QTGoG+IlwUMhNlXJbDyCa6EkHM/N2w=
+golang.org/x/crypto v0.0.0-20170516161655-0fe963104e9d/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
+golang.org/x/image v0.0.0-20170504002241-f483456c9f61 h1:Xc33YNs2csnZ3za3mhO4WIquRZN0gea0VR1m6KUIGsI=
+golang.org/x/image v0.0.0-20170504002241-f483456c9f61/go.mod h1:ux5Hcp/YLpHSI86hEcLt0YII63i6oz57MZXIpbrjZUs=
+golang.org/x/sys v0.0.0-20161214190518-d75a52659825/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/text v0.0.0-20170530162606-4ee4af566555/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+gopkg.in/yaml.v2 v2.0.0-20160928153709-a5b47d31c556/go.mod h1:JAlM8MvJe8wmxCU4Bli9HhUf9+ttbYbLASfIpnQbh74=
