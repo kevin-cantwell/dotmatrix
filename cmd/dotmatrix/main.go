@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"image"
 	"image/draw"
@@ -11,7 +12,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	_ "golang.org/x/image/bmp"
 
@@ -23,6 +26,13 @@ import (
 )
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			showCursor(true)
+			panic(r)
+		}
+	}()
+
 	app := cli.NewApp()
 	app.Version = "0.1.0"
 	app.Name = "dotmatrix"
@@ -78,6 +88,12 @@ func main() {
 		},
 	}
 	app.Action = func(c *cli.Context) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		go handleInterrupt(cancel)
+
+		showCursor(false)
+		defer showCursor(true)
+
 		reader, mimeType, err := decodeReader(c)
 		if err != nil {
 			return err
@@ -88,14 +104,14 @@ func main() {
 		}
 
 		if c.Bool("motion") {
-			return mjpegAction(c, reader, c.Int("framerate"))
+			return mjpegAction(ctx, c, reader, c.Int("framerate"))
 		}
 
 		switch mimeType {
 		case "video/x-motion-jpeg":
-			return mjpegAction(c, reader, c.Int("framerate"))
+			return mjpegAction(ctx, c, reader, c.Int("framerate"))
 		case "image/gif":
-			return gifAction(c, reader)
+			return gifAction(ctx, c, reader)
 		default:
 			return imageAction(c, reader)
 		}
@@ -103,6 +119,25 @@ func main() {
 
 	if err := app.Run(os.Args); err != nil {
 		exit(err.Error(), 1)
+	}
+}
+
+func handleInterrupt(cancel func()) {
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		<-signals
+		showCursor(true)
+		signal.Stop(signals)
+		cancel()
+	}()
+}
+
+func showCursor(show bool) {
+	if show {
+		fmt.Fprint(os.Stdout, "\033[?12l\033[?25h")
+	} else {
+		fmt.Fprint(os.Stdout, "\033[?25l")
 	}
 }
 
@@ -133,16 +168,16 @@ func imageAction(c *cli.Context, r io.Reader) error {
 	return dotmatrix.NewPrinter(os.Stdout, config(c)).Print(img)
 }
 
-func gifAction(c *cli.Context, r io.Reader) error {
+func gifAction(ctx context.Context, c *cli.Context, r io.Reader) error {
 	giff, err := gif.DecodeAll(r)
 	if err != nil {
 		return err
 	}
-	return dotmatrix.NewGIFPrinter(os.Stdout, config(c)).Print(giff)
+	return dotmatrix.NewGIFPrinter(os.Stdout, config(c)).Print(ctx, giff)
 }
 
-func mjpegAction(c *cli.Context, r io.Reader, fps int) error {
-	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(r, fps)
+func mjpegAction(ctx context.Context, c *cli.Context, r io.Reader, fps int) error {
+	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(ctx, r, fps)
 }
 
 func decodeReader(c *cli.Context) (io.Reader, string, error) {

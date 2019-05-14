@@ -2,13 +2,10 @@ package dotmatrix
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"image"
 	"image/jpeg"
 	"io"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -29,17 +26,13 @@ func NewMJPEGPrinter(w io.Writer, c *Config) *MJPEGPrinter {
 	frame as quickly as it can. Otherwise, fps dictacts how many frames per second
 	are printed.
 */
-func (p *MJPEGPrinter) Print(r io.Reader, fps int) error {
-	showCursor(p.w, false)
-	defer showCursor(p.w, true)
-	go p.handleInterrupt()
-
+func (p *MJPEGPrinter) Print(ctx context.Context, r io.Reader, fps int) error {
 	reader := mjpegStreamer{
 		r:   r,
 		fps: fps,
 	}
 
-	for frame := range reader.ReadAll() {
+	for frame := range reader.ReadAll(ctx) {
 		if frame.err != nil {
 			return frame.err
 		}
@@ -61,25 +54,6 @@ func (p *MJPEGPrinter) Print(r io.Reader, fps int) error {
 	return nil
 }
 
-func (p *MJPEGPrinter) handleInterrupt() {
-	signals := make(chan os.Signal)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	go func() {
-		s := <-signals
-		showCursor(p.w, true)
-		// Stop notifying this channel
-		signal.Stop(signals)
-		// All Signals returned by the signal package should be of type syscall.Signal
-		if signum, ok := s.(syscall.Signal); ok {
-			// Calling os.Exit here would be a bad idea if there are other goroutines
-			// waiting to catch the same signal.
-			syscall.Kill(syscall.Getpid(), signum)
-		} else {
-			panic(fmt.Sprintf("unexpected signal: %v", s))
-		}
-	}()
-}
-
 type frame struct {
 	img image.Image
 	err error
@@ -90,7 +64,7 @@ type mjpegStreamer struct {
 	fps int
 }
 
-func (mjpeg *mjpegStreamer) ReadAll() <-chan frame {
+func (mjpeg *mjpegStreamer) ReadAll(ctx context.Context) <-chan frame {
 	frames := make(chan frame)
 	go func() {
 		defer close(frames)
@@ -124,6 +98,8 @@ func (mjpeg *mjpegStreamer) ReadAll() <-chan frame {
 						return
 					}
 					select {
+					case <-ctx.Done():
+						return
 					case frames <- frame{img: img, err: err}:
 						<-delay
 					default:

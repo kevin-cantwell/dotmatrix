@@ -1,14 +1,12 @@
 package dotmatrix
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
 	"io"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -27,14 +25,10 @@ func NewGIFPrinter(w io.Writer, c *Config) *GIFPrinter {
 /*
 	Print animates a gif
 */
-func (p *GIFPrinter) Print(giff *gif.GIF) error {
+func (p *GIFPrinter) Print(ctx context.Context, giff *gif.GIF) error {
 	if len(giff.Image) < 1 {
 		return nil
 	}
-
-	showCursor(p.w, false)
-	defer showCursor(p.w, true)
-	go p.handleInterrupt()
 
 	// Only used if we see background disposal methods
 	bgPallette := []color.Color{color.Transparent}
@@ -51,6 +45,12 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 
 	for c := 0; giff.LoopCount == 0 || c < giff.LoopCount; c++ {
 		for i := 0; i < len(giff.Image); i++ {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			delay := time.After(time.Duration(giff.Delay[i]) * time.Second / 100)
 
 			frame := redraw(giff.Image[i], p.c.Filter, p.c.Drawer)
@@ -94,25 +94,6 @@ func (p *GIFPrinter) Print(giff *gif.GIF) error {
 	return nil
 }
 
-func (p *GIFPrinter) handleInterrupt() {
-	signals := make(chan os.Signal)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	go func() {
-		s := <-signals
-		showCursor(p.w, true)
-		// Stop notifying this channel
-		signal.Stop(signals)
-		// All Signals returned by the signal package should be of type syscall.Signal
-		if signum, ok := s.(syscall.Signal); ok {
-			// Calling os.Exit here would be a bad idea if there are other goroutines
-			// waiting to catch the same signal.
-			syscall.Kill(syscall.Getpid(), signum)
-		} else {
-			panic(fmt.Sprintf("unexpected signal: %v", s))
-		}
-	}()
-}
-
 // Draws any non-transparent pixels into target
 func (p *GIFPrinter) drawOver(target *image.Paletted, source image.Image) {
 	bounds := source.Bounds()
@@ -140,12 +121,4 @@ func (p *GIFPrinter) drawExact(target *image.Paletted, source image.Image) {
 // Move the cursor to the beginning of the line and up rows
 func resetCursor(w io.Writer, rows int) {
 	w.Write([]byte(fmt.Sprintf("\033[999D\033[%dA", rows)))
-}
-
-func showCursor(w io.Writer, show bool) {
-	if show {
-		w.Write([]byte("\033[?12l\033[?25h"))
-	} else {
-		w.Write([]byte("\033[?25l"))
-	}
 }
