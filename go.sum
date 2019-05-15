@@ -2,6 +2,14 @@ github.com/codegangsta/cli v0.0.0-20170128213959-347a9884a873 h1:Z4B0PhzWE8yzHJS
 github.com/codegangsta/cli v0.0.0-20170128213959-347a9884a873/go.mod h1:/qJNoX69yVSKu5o4jLyXAENLRyk1uhi7zkbQ3slBdOA=
 github.com/disintegration/imaging v0.0.0-20160228073435-d8bbae1de109 h1:SR8+9H4plcUP++sH6VFzgl9jQ0ggmgwR0Ch9QepB2N4=
 github.com/disintegration/imaging v0.0.0-20160228073435-d8bbae1de109/go.mod h1:9B/deIUIrliYkyMTuXJd6OUFLcrZ2tf+3Qlwnaf/CjU=
+github.com/go-gl/gl v0.0.0-20180407155706-68e253793080/go.mod h1:482civXOzJJCPzJ4ZOX/pwvXBWSnzD4OKMdH4ClKGbk=
+github.com/go-gl/glfw v0.0.0-20180426074136-46a8d530c326/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
+github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 h1:DACJavvAHhabrF08vX0COfcOBJRhZ8lUbR+ZWIs0Y5g=
+github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0/go.mod h1:E/TSTwGwJL78qG/PmXZO1EjYhfJinVAhrmmHX6Z8B9k=
+github.com/jung-kurt/gofpdf v1.0.0/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
+github.com/llgcode/draw2d v0.0.0-20180825133448-f52c8a71aff0 h1:2vp6ESimuT8pCuZHThVyV0hlfa9oPL06HnGCL9pbUgc=
+github.com/llgcode/draw2d v0.0.0-20180825133448-f52c8a71aff0/go.mod h1:mVa0dA29Db2S4LVqDYLlsePDzRJLDfdhVZiI15uY0FA=
+github.com/llgcode/ps v0.0.0-20150911083025-f1443b32eedb/go.mod h1:1l8ky+Ew27CMX29uG+a2hNOKpeNYEQjjtiALiBlFQbY=
 github.com/nfnt/resize v0.0.0-20160109112512-4d93a29130b1 h1:Gi7SMyKr6jDlZzNhBrTMD/1zFiHsd5NIQw2uAXDf3Jk=
 github.com/nfnt/resize v0.0.0-20160109112512-4d93a29130b1/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
 github.com/onsi/ginkgo v0.0.0-20160722022339-09289bfe14b6 h1:X/rEWJ2sGny1+e++lsEmocn4eXh8nU5DNB5kQ5sCYzE=
@@ -12,6 +20,8 @@ golang.org/x/crypto v0.0.0-20170516161655-0fe963104e9d h1:qjfFh1YMn6m60QTGoG+Ilw
 golang.org/x/crypto v0.0.0-20170516161655-0fe963104e9d/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/image v0.0.0-20170504002241-f483456c9f61 h1:Xc33YNs2csnZ3za3mhO4WIquRZN0gea0VR1m6KUIGsI=
 golang.org/x/image v0.0.0-20170504002241-f483456c9f61/go.mod h1:ux5Hcp/YLpHSI86hEcLt0YII63i6oz57MZXIpbrjZUs=
+golang.org/x/image v0.0.0-20180708004352-c73c2afc3b81 h1:00VmoueYNlNz/aHIilyyQz/MHSqGoWJzpFv/HW8xpzI=
+golang.org/x/image v0.0.0-20180708004352-c73c2afc3b81/go.mod h1:ux5Hcp/YLpHSI86hEcLt0YII63i6oz57MZXIpbrjZUs=
 golang.org/x/sys v0.0.0-20161214190518-d75a52659825/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/text v0.0.0-20170530162606-4ee4af566555/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 gopkg.in/yaml.v2 v2.0.0-20160928153709-a5b47d31c556 h1:hKXbLW5oaJoQgs8KrzTLdF4PoHi+0oQPgea9TNtvE3E=

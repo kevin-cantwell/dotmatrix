@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	_ "image/jpeg"
@@ -20,9 +21,12 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/disintegration/imaging"
-	"github.com/kevin-cantwell/dotmatrix"
+	"github.com/llgcode/draw2d/draw2dimg"
+	"github.com/llgcode/draw2d/draw2dkit"
 	"github.com/nfnt/resize"
 	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/kevin-cantwell/dotmatrix"
 )
 
 func main() {
@@ -32,6 +36,17 @@ func main() {
 			panic(r)
 		}
 	}()
+
+	// print a gopher after the help menu
+	defaultHelpPrinter := cli.HelpPrinter
+	cli.HelpPrinter = func(w io.Writer, templ string, data interface{}) {
+		defaultHelpPrinter(w, templ, data)
+		config := &dotmatrix.Config{
+			Filter: &Filter{Invert: false},
+			Drawer: draw.FloydSteinberg,
+		}
+		dotmatrix.NewPrinter(os.Stdout, config).Print(gopher())
+	}
 
 	app := cli.NewApp()
 	app.Version = "0.1.0"
@@ -126,10 +141,20 @@ func handleInterrupt(cancel func()) {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
-		<-signals
+		s := <-signals
 		showCursor(true)
+		// Stop notifying this channel
 		signal.Stop(signals)
 		cancel()
+
+		// All Signals returned by the signal package should be of type syscall.Signal
+		if signum, ok := s.(syscall.Signal); ok {
+			// Calling os.Exit here would be a bad idea if there are other goroutines
+			// waiting to catch the same signal.
+			syscall.Kill(syscall.Getpid(), signum)
+		} else {
+			panic(fmt.Sprintf("unexpected signal: %v", s))
+		}
 	}()
 }
 
@@ -312,4 +337,131 @@ func scalar(dx, dy int, cols, rows int) float64 {
 func exit(msg string, code int) {
 	fmt.Println(msg)
 	os.Exit(code)
+}
+
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢀⢀⡀⡄⡄⠤⣄⡠⢄⠤⢠⢀⠄⡀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠠⡄⡆⠮⢕⢕⢍⡢⢇⠧⢍⢇⢖⠬⡪⠭⢡⠣⡇⢫⢕⢕⠍⡦⠆⡤⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⡄⡆⢗⡪⣑⡱⡸⣩⢪⠒⡕⡬⠥⡫⡒⢪⢜⢔⡱⠭⡱⠥⢣⢇⢎⢎⢪⡒⢭⠪⢭⢒⡣⢆⡄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠠⡢⢕⡣⢕⢭⠑⠒⠑⠈⠘⠄⠇⠭⡜⢌⢖⢕⢜⢕⣊⢔⡒⡭⠜⡍⣒⢕⠥⠥⠃⠚⠈⠉⠸⠘⢨⢆⠳⠌⡧⢄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡠⡢⢕⢍⡪⢆⡓⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠸⡢⠕⡕⢅⡆⢗⢜⠬⢕⡪⡪⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠋⡭⡪⣒⣒⣒⣂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⢸⠸⢌⡲⣑⡌⠇⠀⠀⠀⠀⠀⠀⠀⣠⣤⣦⣤⣀⡀⠨⢍⢎⢖⢕⢪⠪⢒⠥⢎⠀⠀⠀⠀⠀⠀⠀⣀⣤⣴⣤⣄⡀⠈⢎⡰⣒⢂⢖⢝⢔⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢰⢩⢕⢕⠭⢜⣘⢔⢪⠀⠀⠀⠀⠀⠀⢀⣾⣿⣿⡿⠟⠻⢷⡀⠪⡪⣂⠮⢜⠜⡕⠭⠁⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠟⠟⢿⡄⢨⢪⢒⣊⢎⢎⣨⢒⡣⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡠⡕⡕⡕⠕⢕⢜⣒⡸⡢⠭⠀⠀⠀⠀⠀⠀⢘⣿⣿⣿⣇⠀⠀⣸⡇⠨⡪⡢⠭⣒⡚⢬⡚⠄⠀⠀⠀⠀⠀⠀⣿⣿⣿⣧⡀⠀⣐⡇⠐⡕⠕⣒⠪⣰⢸⠸⢘⠬⠥⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⢄⠪⡁⢣⠩⡰⡠⡜⣒⢕⠕⡒⡍⡎⡖⢢⢜⠬⢑⠅⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⡿⠟⠀⡪⡪⡪⡪⣂⢗⢊⡪⣂⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⡿⠟⠀⠬⡪⣚⠤⢫⢢⠥⢫⠥⢫⠱⡪⠢⡢⠅⣃⢃⠣⡑⠠⡀⠀⠀
+// ⠀⠀⠀⠀⡐⢩⢂⣡⡪⣜⣆⣖⠕⢮⢒⣊⢖⣃⠕⡕⡕⢪⢜⢜⠭⢔⠄⠀⠀⠀⠀⠀⠀⠀⠈⠉⠁⠀⠀⡬⣘⣬⣮⣮⣶⣵⣕⣖⢕⢄⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⢀⠬⢹⢌⡒⣎⡱⣑⡩⢕⢕⣸⠸⡜⢎⢧⢬⣢⡣⣜⢔⠡⡔⡀⠀
+// ⠀⠀⠀⠀⡸⡐⡡⣳⣝⣗⣗⢷⢝⣑⢕⡜⣒⠬⣍⣊⢎⠥⣃⡣⡱⡪⠭⡅⠤⢀⠀⠀⠀⠀⠀⡀⡀⡤⣫⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣾⡢⠤⡀⠀⠀⠀⠀⠀⢀⢀⢰⢱⢉⢇⢇⠖⠕⡬⠔⡪⡪⡒⣒⡪⡋⣞⢬⣻⣪⢯⣳⣝⡂⡒⡀⠀
+// ⠀⠀⠀⠀⡒⠨⠌⣳⡳⣵⣳⣫⡳⣑⢕⠜⣒⡢⢕⣂⢎⢖⢕⡰⠥⡣⢩⠪⡹⡘⡜⢲⢡⢕⣊⢎⣒⣱⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡱⡩⠥⣋⠬⡢⢍⢲⣉⢎⢎⢪⠪⢬⠪⠭⠜⡍⣊⠎⢎⣒⠜⣎⢴⢕⢷⣝⣗⢗⠗⡄⢣⠈⠀
+// ⠀⠀⠀⠀⠈⠑⡑⢔⢘⠬⡪⣔⢼⡘⠥⡫⡒⣒⠥⣊⢎⠎⣒⢜⡱⡩⠕⡥⡣⡱⣉⢇⣃⢥⢒⡡⣆⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢧⡍⡇⡜⣱⡘⡕⢕⠬⢔⡪⡪⡪⠥⡪⢍⢇⢎⢖⠭⢑⢜⣒⠪⢦⠫⡸⢜⠨⡘⠄⠎⠔⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠑⠐⢘⢖⠪⣒⢜⢍⢪⠪⠒⣎⢢⠣⢕⢕⢕⠬⠜⡜⡌⡎⣎⢢⠓⡤⡣⣵⣳⡳⣝⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⣗⣗⣗⡵⣑⠴⡱⡡⢫⠥⡪⡪⠌⡣⠭⡜⠴⢑⢎⢎⠭⢒⡢⠭⡒⡭⠝⡜⠈⠈⠁⠁⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⡕⢣⠣⣑⢕⢕⠭⠍⡲⡱⡩⢕⠥⠕⡜⢍⣊⡜⡌⡖⢊⠞⡔⣻⣺⡺⣺⣳⣳⣻⣻⣿⣿⣿⣿⣿⣿⡿⣟⣗⣗⣗⣗⡵⡯⡧⢱⠒⡭⡑⣕⠒⡕⠭⠭⠴⢩⢍⠮⡜⠤⡫⡪⡪⢱⢪⠪⠭⠜⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠨⡚⢌⢳⢸⢸⢠⠮⢙⡒⡕⢕⢜⢜⢕⠼⡸⢄⠧⡜⢜⢕⡚⡜⡵⣳⣝⢷⢵⡳⣵⣳⡳⡽⡽⡽⡽⣺⣝⣗⣗⣗⣗⣗⡽⡽⢝⢕⢕⢕⡸⢤⢫⠪⠭⢜⢕⢕⠕⢕⡘⡭⠜⡔⡎⢱⠪⡑⡭⠍⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⡸⡉⣎⡒⢎⡢⣍⠳⢸⢨⢪⠒⡕⠪⡢⡓⡎⢱⢒⣡⢣⠲⢱⢉⠗⡹⢽⢵⣻⣺⣺⡺⡽⡽⣝⡽⣵⣳⡳⣵⡳⣵⡳⡝⡍⢖⢕⢡⢕⡒⢥⠣⡱⢍⢎⣊⠦⠭⣑⢎⢪⠪⡜⠬⡕⠎⡇⣃⢏⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠨⣊⢎⢒⠬⡪⡪⡰⡪⡣⡱⡑⡇⡭⢍⡪⡪⡪⡱⡑⡜⢌⠭⣑⢕⢍⠆⠀⠉⠘⠘⠚⠚⠝⠝⠮⠛⠚⠚⠚⠑⠉⠀⠀⢪⠪⢜⡒⡱⣑⠲⡅⣇⣓⢪⢲⢘⣂⢏⣔⠪⡜⢲⠩⠕⡜⢍⡜⠜⡤⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣠⠓⡎⡭⢌⡪⡪⡊⡬⡪⡪⡪⠪⢢⢣⠣⠜⡬⡪⣚⡨⢍⡢⢕⠕⡅⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢕⠭⢑⣒⢕⢕⠕⡕⡔⣒⡱⡡⠕⣒⣊⢆⡕⠭⣡⠫⣉⢎⢖⢩⠭⠜⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢨⠒⡍⡎⡪⡪⣊⣊⠎⢎⠬⢔⡒⡭⠣⡣⢱⠭⡪⠬⣒⡨⢣⢜⠱⡱⣂⠀⠀⠀⠀⠀⠀⠀⠀⠆⠀⠀⠀⠀⠀⠀⠀⢀⢕⠭⣑⢜⠤⡣⡱⡱⡑⣒⢜⠬⢹⠰⡢⡣⡘⡍⡢⢕⠣⢣⣑⢕⢍⡜⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢞⢒⢱⠱⡸⢄⢖⢍⢱⡙⡬⡪⠪⡚⠬⡕⢅⢖⠭⢔⣊⠥⡣⣓⢪⢒⡢⡠⢄⢄⢄⢄⠤⢌⢇⢆⠤⢀⢄⢄⡠⡐⡕⢕⢕⠕⠕⡕⢪⠪⣊⡪⡒⡪⡪⡣⡱⣑⣊⢕⠥⢫⠥⢫⠥⢒⢕⢕⠌⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠁⠀⠈⠀⠀⠁⠀⠀⠈⠀⠈⠀⠀⠁⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠈⠀⠀⠀⠈⠀⠁⠀⠀⠈⠀⠀⠀⠈⠀⠁⠀⠈⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠈⠀⠈⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+func gopher() image.Image {
+	// Initialize the graphic context on an RGBA image
+	dest := image.NewRGBA(image.Rect(0, 0, 297, 148.0))
+	gc := draw2dimg.NewGraphicContext(dest)
+
+	gc.SetStrokeColor(image.Black)
+	gc.SetFillColor(image.White)
+	gc.Save()
+	// Draw a (partial) gopher
+	gc.Translate(-15, -45)
+
+	var x, y, w, h float64 = 48, 48, 240, 72
+
+	h23 := (h * 2) / 3
+
+	blf := color.RGBA{0, 0, 0, 0xff}          // black
+	wf := color.RGBA{0xff, 0xff, 0xff, 0xff}  // white
+	nf := color.RGBA{0x8B, 0x45, 0x13, 0xff}  // brown opaque
+	brf := color.RGBA{0x8B, 0x45, 0x13, 0x99} // brown transparant
+	brb := color.RGBA{0x8B, 0x45, 0x13, 0xBB} // brown transparant
+
+	// round head top
+	gc.MoveTo(x, y+h*1.002)
+	gc.CubicCurveTo(x+w/4, y-h/3, x+3*w/4, y-h/3, x+w, y+h*1.002)
+	gc.Close()
+	gc.SetFillColor(brb)
+	gc.Fill()
+
+	// rectangle head bottom
+	draw2dkit.RoundedRectangle(gc, x, y+h, x+w, y+h+h, h/5, h/5)
+	gc.Fill()
+
+	// left ear outside
+	draw2dkit.Circle(gc, x, y+h, w/12)
+	gc.SetFillColor(brf)
+	gc.Fill()
+
+	// left ear inside
+	draw2dkit.Circle(gc, x, y+h, 0.5*w/12)
+	gc.SetFillColor(nf)
+	gc.Fill()
+
+	// right ear outside
+	draw2dkit.Circle(gc, x+w, y+h, w/12)
+	gc.SetFillColor(brf)
+	gc.Fill()
+
+	// right ear inside
+	draw2dkit.Circle(gc, x+w, y+h, 0.5*w/12)
+	gc.SetFillColor(nf)
+	gc.Fill()
+
+	// left eye outside white
+	draw2dkit.Circle(gc, x+w/3, y+h23, w/9)
+	gc.SetFillColor(wf)
+	gc.Fill()
+
+	// left eye black
+	draw2dkit.Circle(gc, x+w/3+w/24, y+h23, 0.5*w/9)
+	gc.SetFillColor(blf)
+	gc.Fill()
+
+	// left eye inside white
+	draw2dkit.Circle(gc, x+w/3+w/24+w/48, y+h23, 0.2*w/9)
+	gc.SetFillColor(wf)
+	gc.Fill()
+
+	// right eye outside white
+	draw2dkit.Circle(gc, x+w-w/3, y+h23, w/9)
+	gc.Fill()
+
+	// right eye black
+	draw2dkit.Circle(gc, x+w-w/3+w/24, y+h23, 0.5*w/9)
+	gc.SetFillColor(blf)
+	gc.Fill()
+
+	// right eye inside white
+	draw2dkit.Circle(gc, x+w-(w/3)+w/24+w/48, y+h23, 0.2*w/9)
+	gc.SetFillColor(wf)
+	gc.Fill()
+
+	// left tooth
+	gc.SetFillColor(wf)
+	draw2dkit.RoundedRectangle(gc, x+w/2-w/8, y+h+h/2.5, x+w/2-w/8+w/8, y+h+h/2.5+w/6, w/10, w/10)
+	gc.Fill()
+
+	// right tooth
+	draw2dkit.RoundedRectangle(gc, x+w/2, y+h+h/2.5, x+w/2+w/8, y+h+h/2.5+w/6, w/10, w/10)
+	gc.Fill()
+
+	// snout
+	draw2dkit.Ellipse(gc, x+(w/2), y+h+h/2.5, w/6, w/12)
+	gc.SetFillColor(nf)
+	gc.Fill()
+
+	// nose
+	draw2dkit.Ellipse(gc, x+(w/2), y+h+h/7, w/10, w/12)
+	gc.SetFillColor(blf)
+	gc.Fill()
+
+	gc.Restore()
+
+	return dest
 }
