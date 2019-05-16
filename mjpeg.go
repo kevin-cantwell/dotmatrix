@@ -48,7 +48,7 @@ func (p *MJPEGPrinter) Print(ctx context.Context, r io.Reader, fps int) error {
 			rows++
 		}
 
-		resetCursor(p.w, rows)
+		p.c.Reset(p.w, rows)
 	}
 
 	return nil

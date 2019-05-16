@@ -1,6 +1,7 @@
 package dotmatrix
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -28,6 +29,9 @@ type Config struct {
 	Filter  Filter
 	Flusher Flusher
 	Drawer  draw.Drawer
+	// Reset is invoked between animated frames of an image. It can be used to
+	// apply custom cursor positioning.
+	Reset func(w io.Writer, rows int)
 }
 
 var defaultConfig = Config{
@@ -48,6 +52,11 @@ func mergeConfig(c *Config) Config {
 	}
 	if c.Flusher == nil {
 		c.Flusher = defaultConfig.Flusher
+	}
+	if c.Reset == nil {
+		c.Reset = func(w io.Writer, rows int) {
+			fmt.Fprintf(w, "\033[999D\033[%dA", rows)
+		}
 	}
 	return *c
 }

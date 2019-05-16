@@ -2,7 +2,6 @@ package dotmatrix
 
 import (
 	"context"
-	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -88,7 +87,7 @@ func (p *GIFPrinter) Print(ctx context.Context, giff *gif.GIF) error {
 				<-delay
 			}
 
-			resetCursor(p.w, rows)
+			p.c.Reset(p.w, rows)
 		}
 	}
 	return nil
@@ -116,9 +115,4 @@ func (p *GIFPrinter) drawExact(target *image.Paletted, source image.Image) {
 			target.Set(x, y, source.At(x, y))
 		}
 	}
-}
-
-// Move the cursor to the beginning of the line and up rows
-func resetCursor(w io.Writer, rows int) {
-	w.Write([]byte(fmt.Sprintf("\033[999D\033[%dA", rows)))
 }
