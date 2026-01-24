@@ -318,10 +318,16 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 				// We go up (numLines) lines from the current position (which is after the last row)
 				fmt.Fprintf(p.w, "\033[%dA", numLines)
 
-				// Write each line centered
+				// Write each line centered (preserving braille on left and right)
 				for i, line := range lines {
-					centered := centerText(line, imageWidthInChars)
-					fmt.Fprintf(p.w, "\r%s", centered)
+					// Calculate column position for centered text (1-indexed for ANSI)
+					lineLen := len([]rune(line))
+					startCol := (imageWidthInChars - lineLen) / 2
+					if startCol < 1 {
+						startCol = 1
+					}
+					// Move cursor to the start column and write text (preserves braille on sides)
+					fmt.Fprintf(p.w, "\033[%dG%s", startCol, line)
 					if i < numLines-1 {
 						fmt.Fprint(p.w, "\n")
 					}
@@ -347,16 +353,6 @@ func findActiveSubtitle(subtitles []subtitle, pts int64) string {
 		}
 	}
 	return ""
-}
-
-// centerText centers text within the given width (assumes text already fits).
-func centerText(text string, width int) string {
-	textLen := len([]rune(text))
-	if textLen >= width {
-		return text
-	}
-	padding := (width - textLen) / 2
-	return strings.Repeat(" ", padding) + text
 }
 
 // wrapText wraps text to fit within width, limiting to maxLines.
