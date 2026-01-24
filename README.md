@@ -101,18 +101,18 @@ func main() {
 
 ## Options
 
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--invert` | `-i` | Invert colors (for dark terminals) |
-| `--gamma` | `-g` | Adjust gamma (-1.0 to 1.0) |
-| `--brightness` | `-b` | Adjust brightness (-100 to 100) |
-| `--contrast` | `-c` | Adjust contrast (-100 to 100) |
-| `--sharpen` | `-s` | Sharpen image (0+) |
-| `--mirror` | `-m` | Flip image horizontally |
-| `--mono` | | Disable Floyd-Steinberg dithering |
-| `--webcam` | `-w` | Capture from webcam (macOS only) |
-| `--framerate` | `--fps` | Set framerate for video/webcam playback |
-| `--mimeType` | `--mime` | Force specific MIME type |
+| Flag | Description |
+|------|-------------|
+| `--invert`, `-i` | Invert colors (for dark backgrounds) |
+| `--gamma`, `-g` | Adjust gamma: negative darkens, positive lightens |
+| `--brightness`, `-b` | Adjust brightness (-100 to 100) |
+| `--contrast`, `-c` | Adjust contrast (-100 to 100) |
+| `--sharpen`, `-s` | Sharpen image |
+| `--mirror`, `-m` | Flip image horizontally |
+| `--mono` | Disable Floyd-Steinberg dithering |
+| `--webcam`, `-w` | Capture from webcam (macOS only) |
+| `--framerate`, `--fps` | Set playback framerate |
+| `--mimeType`, `--mime` | Override auto-detected MIME type |
 
 ## Examples
 
