@@ -21,7 +21,7 @@ Convert images to Unicode braille art for terminal display.
 - Animated GIF support with proper frame timing and disposal methods
 - MP4 video playback with H.264 decoding (requires FFmpeg)
 - Embedded subtitle rendering for MP4 files (mov_text format)
-- MJPEG stream support for webcams and video feeds
+- Native webcam capture on macOS (AVFoundation)
 - Image adjustments: gamma, brightness, contrast, sharpening
 - Floyd-Steinberg dithering for grayscale preservation
 - Automatic scaling to fit terminal dimensions
@@ -73,6 +73,12 @@ dotmatrix video.mp4
 
 # Play MP4 at specific framerate
 dotmatrix --fps 15 video.mp4
+
+# Capture from webcam (macOS only)
+dotmatrix --webcam
+
+# Webcam with options
+dotmatrix --webcam --invert --fps 15
 ```
 
 ### As a Library
@@ -95,18 +101,18 @@ func main() {
 
 ## Options
 
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--invert` | `-i` | Invert colors (for dark terminals) |
-| `--gamma` | `-g` | Adjust gamma (-1.0 to 1.0) |
-| `--brightness` | `-b` | Adjust brightness (-100 to 100) |
-| `--contrast` | `-c` | Adjust contrast (-100 to 100) |
-| `--sharpen` | `-s` | Sharpen image (0+) |
-| `--mirror` | `-m` | Flip image horizontally |
-| `--mono` | | Disable Floyd-Steinberg dithering |
-| `--motion` | `--mjpeg` | Interpret input as MJPEG stream |
-| `--framerate` | `--fps` | Set framerate for video playback (MP4/MJPEG) |
-| `--mimeType` | `--mime` | Force specific MIME type |
+| Flag | Description |
+|------|-------------|
+| `--invert`, `-i` | Invert colors (for dark backgrounds) |
+| `--gamma`, `-g` | Adjust gamma: negative darkens, positive lightens |
+| `--brightness`, `-b` | Adjust brightness (-100 to 100) |
+| `--contrast`, `-c` | Adjust contrast (-100 to 100) |
+| `--sharpen`, `-s` | Sharpen image |
+| `--mirror`, `-m` | Flip image horizontally |
+| `--mono` | Disable Floyd-Steinberg dithering |
+| `--webcam`, `-w` | Capture from webcam (macOS only) |
+| `--framerate`, `--fps` | Set playback framerate |
+| `--mimeType`, `--mime` | Override auto-detected MIME type |
 
 ## Examples
 

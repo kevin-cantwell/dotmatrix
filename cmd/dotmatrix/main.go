@@ -36,7 +36,7 @@ func main() {
 	app := &cli.App{
 		Name:            "dotmatrix",
 		Usage:           "Render images and video as Unicode braille art",
-		Version:         "0.1.1",
+		Version:         "0.2.0",
 		UsageText:       "dotmatrix [options] [file|url]\ncat [file|url] | dotmatrix [options]",
 		HideHelpCommand: true,
 		Flags: []cli.Flag{
@@ -82,9 +82,9 @@ func main() {
 				DisableDefaultText: true,
 			},
 			&cli.BoolFlag{
-				Name:               "motion",
-				Aliases:            []string{"mjpeg"},
-				Usage:              "Interpret input as MJPEG stream",
+				Name:               "webcam",
+				Aliases:            []string{"w"},
+				Usage:              "Capture from webcam (macOS only)",
 				DisableDefaultText: true,
 			},
 			&cli.IntFlag{
@@ -107,6 +107,11 @@ func main() {
 			showCursor(false)
 			defer showCursor(true)
 
+			// Webcam mode doesn't need file/URL input
+			if c.Bool("webcam") {
+				return webcamAction(ctx, c, c.Int("framerate"))
+			}
+
 			reader, inputPath, mimeType, err := decodeReader(c)
 			if err != nil {
 				return err
@@ -116,18 +121,12 @@ func main() {
 				mimeType = mime
 			}
 
-			if c.Bool("motion") {
-				return mjpegAction(ctx, c, reader, c.Int("framerate"))
-			}
-
 			switch mimeType {
 			case "video/mp4", "application/mp4":
 				if inputPath == "" {
 					return fmt.Errorf("mp4: video playback requires a file path, not stdin or URL")
 				}
 				return mp4Action(ctx, c, inputPath, c.Int("framerate"))
-			case "video/x-motion-jpeg":
-				return mjpegAction(ctx, c, reader, c.Int("framerate"))
 			case "image/gif":
 				return gifAction(ctx, c, reader)
 			default:
@@ -206,8 +205,8 @@ func gifAction(ctx context.Context, c *cli.Context, r io.Reader) error {
 	return dotmatrix.NewGIFPrinter(os.Stdout, config(c)).Print(ctx, giff)
 }
 
-func mjpegAction(ctx context.Context, c *cli.Context, r io.Reader, fps int) error {
-	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(ctx, r, fps)
+func webcamAction(ctx context.Context, c *cli.Context, fps int) error {
+	return dotmatrix.NewWebcamPrinter(os.Stdout, config(c)).Print(ctx, fps)
 }
 
 func mp4Action(ctx context.Context, c *cli.Context, inputPath string, fps int) error {
