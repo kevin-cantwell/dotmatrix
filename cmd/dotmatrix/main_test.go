@@ -696,13 +696,17 @@ func TestDecodeReader_File(t *testing.T) {
 
 	app := &cli.App{
 		Action: func(c *cli.Context) error {
-			reader, mimeType, err := decodeReader(c)
+			reader, inputPath, mimeType, err := decodeReader(c)
 			if err != nil {
 				return err
 			}
 
 			if reader == nil {
 				t.Error("expected reader to be set")
+			}
+
+			if inputPath == "" {
+				t.Error("expected inputPath to be set for file input")
 			}
 
 			if !strings.HasPrefix(mimeType, "image/png") {
@@ -724,7 +728,7 @@ func TestDecodeReader_GIF(t *testing.T) {
 
 	app := &cli.App{
 		Action: func(c *cli.Context) error {
-			reader, mimeType, err := decodeReader(c)
+			reader, _, mimeType, err := decodeReader(c)
 			if err != nil {
 				return err
 			}
@@ -750,7 +754,7 @@ func TestDecodeReader_GIF(t *testing.T) {
 func TestDecodeReader_NonexistentFile(t *testing.T) {
 	app := &cli.App{
 		Action: func(c *cli.Context) error {
-			_, _, err := decodeReader(c)
+			_, _, _, err := decodeReader(c)
 			if err == nil {
 				t.Error("expected error for nonexistent file")
 			}

@@ -104,7 +104,7 @@ func main() {
 			showCursor(false)
 			defer showCursor(true)
 
-			reader, mimeType, err := decodeReader(c)
+			reader, inputPath, mimeType, err := decodeReader(c)
 			if err != nil {
 				return err
 			}
@@ -118,6 +118,11 @@ func main() {
 			}
 
 			switch mimeType {
+			case "video/mp4", "application/mp4":
+				if inputPath == "" {
+					return fmt.Errorf("mp4: video playback requires a file path, not stdin or URL")
+				}
+				return mp4Action(ctx, c, inputPath, c.Int("framerate"))
 			case "video/x-motion-jpeg":
 				return mjpegAction(ctx, c, reader, c.Int("framerate"))
 			case "image/gif":
@@ -202,8 +207,13 @@ func mjpegAction(ctx context.Context, c *cli.Context, r io.Reader, fps int) erro
 	return dotmatrix.NewMJPEGPrinter(os.Stdout, config(c)).Print(ctx, r, fps)
 }
 
-func decodeReader(c *cli.Context) (io.Reader, string, error) {
+func mp4Action(ctx context.Context, c *cli.Context, inputPath string, fps int) error {
+	return dotmatrix.NewMP4Printer(os.Stdout, config(c)).Print(ctx, inputPath, fps)
+}
+
+func decodeReader(c *cli.Context) (io.Reader, string, string, error) {
 	var reader io.Reader = os.Stdin
+	var inputPath string // Only set for local files (for MP4 support)
 
 	// Assign to reader
 	if input := c.Args().First(); input != "" {
@@ -211,14 +221,15 @@ func decodeReader(c *cli.Context) (io.Reader, string, error) {
 		if !strings.HasPrefix(input, "http://") && !strings.HasPrefix(input, "https://") {
 			file, err := os.Open(input)
 			if err != nil {
-				return nil, "", err
+				return nil, "", "", err
 			}
 			reader = file
+			inputPath = input // Store the file path for MP4 support
 		} else {
 			// Is it a url?
 			resp, err := http.Get(input)
 			if err != nil {
-				return nil, "", err
+				return nil, "", "", err
 			}
 			reader = resp.Body
 		}
@@ -228,12 +239,12 @@ func decodeReader(c *cli.Context) (io.Reader, string, error) {
 
 	peeked, err := bufioReader.Peek(512)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
 	mimeType := http.DetectContentType(peeked)
 
-	return bufioReader, mimeType, nil
+	return bufioReader, inputPath, mimeType, nil
 }
 
 type Filter struct {

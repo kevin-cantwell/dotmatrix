@@ -5,8 +5,8 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
+	github.com/asticode/go-astiav v0.30.0
 	github.com/disintegration/imaging v1.6.2
-	github.com/llgcode/draw2d v0.0.0-20240627062922-0ed1ff131195
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.36.2
 	github.com/urfave/cli/v2 v2.27.5
@@ -15,9 +15,9 @@ require (
 )
 
 require (
+	github.com/asticode/go-astikit v0.42.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
