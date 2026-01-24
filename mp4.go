@@ -2,13 +2,22 @@ package dotmatrix
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/asticode/go-astiav"
 )
+
+// subtitle holds a decoded subtitle with timing information.
+type subtitle struct {
+	startPTS int64
+	endPTS   int64
+	text     string
+}
 
 // MP4Printer prints MP4 video frames as braille characters.
 type MP4Printer struct {
@@ -60,14 +69,23 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 		return fmt.Errorf("mp4: finding stream info failed: %w", err)
 	}
 
-	// Find video stream
+	// Find video and subtitle streams
 	var videoStream *astiav.Stream
 	var videoStreamIdx int
+	var subtitleStream *astiav.Stream
+	var subtitleStreamIdx int
 	for _, s := range formatCtx.Streams() {
-		if s.CodecParameters().MediaType() == astiav.MediaTypeVideo {
-			videoStream = s
-			videoStreamIdx = s.Index()
-			break
+		switch s.CodecParameters().MediaType() {
+		case astiav.MediaTypeVideo:
+			if videoStream == nil {
+				videoStream = s
+				videoStreamIdx = s.Index()
+			}
+		case astiav.MediaTypeSubtitle:
+			if subtitleStream == nil {
+				subtitleStream = s
+				subtitleStreamIdx = s.Index()
+			}
 		}
 	}
 	if videoStream == nil {
@@ -95,6 +113,13 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 	// Open codec
 	if err := codecCtx.Open(codec, nil); err != nil {
 		return fmt.Errorf("mp4: opening codec failed: %w", err)
+	}
+
+	// Set up subtitle storage if subtitle stream exists
+	var subtitles []subtitle
+	var subtitleTimeBase astiav.Rational
+	if subtitleStream != nil {
+		subtitleTimeBase = subtitleStream.TimeBase()
 	}
 
 	// Create software scale context for converting to RGBA
@@ -130,6 +155,35 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 				return nil
 			}
 			return fmt.Errorf("mp4: reading frame failed: %w", err)
+		}
+
+		// Handle subtitle packets
+		if subtitleStream != nil && pkt.StreamIndex() == subtitleStreamIdx {
+			// Parse mov_text subtitle format (2-byte length prefix + UTF-8 text)
+			data := pkt.Data()
+			if len(data) >= 2 {
+				textLen := int(binary.BigEndian.Uint16(data[:2]))
+				if textLen > 0 && len(data) >= 2+textLen {
+					text := strings.TrimSpace(string(data[2 : 2+textLen]))
+					if text != "" {
+						// Convert subtitle PTS to video stream time base
+						pktPTS := pkt.Pts()
+						startPTS := pktPTS * int64(subtitleTimeBase.Num()) * int64(timeBase.Den()) / (int64(subtitleTimeBase.Den()) * int64(timeBase.Num()))
+						// Duration from packet, convert to video time base
+						pktDuration := pkt.Duration()
+						durationPTS := pktDuration * int64(subtitleTimeBase.Num()) * int64(timeBase.Den()) / (int64(subtitleTimeBase.Den()) * int64(timeBase.Num()))
+						endPTS := startPTS + durationPTS
+
+						subtitles = append(subtitles, subtitle{
+							startPTS: startPTS,
+							endPTS:   endPTS,
+							text:     text,
+						})
+					}
+				}
+			}
+			pkt.Unref()
+			continue
 		}
 
 		// Skip non-video packets
@@ -244,8 +298,46 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 				}
 			}
 
+			// Overlay subtitle on the last row of the braille output
+			imageWidthInChars := filteredImg.Bounds().Dx() / 2
+			currentPTS := frame.Pts()
+			activeSubtitle := findActiveSubtitle(subtitles, currentPTS)
+			if activeSubtitle != "" {
+				centered := centerText(activeSubtitle, imageWidthInChars)
+				// Move cursor up 1 line, to beginning, write subtitle, then back down
+				fmt.Fprintf(p.w, "\033[1A\r%s\033[1B\r", centered)
+			}
+
 			p.c.Reset(p.w, rows)
 			frame.Unref()
 		}
 	}
+}
+
+// findActiveSubtitle returns the subtitle text that should be displayed at the given PTS.
+func findActiveSubtitle(subtitles []subtitle, pts int64) string {
+	for _, s := range subtitles {
+		if pts >= s.startPTS && pts < s.endPTS {
+			return s.text
+		}
+	}
+	return ""
+}
+
+// centerText centers text within the given width, truncating if necessary.
+func centerText(text string, width int) string {
+	text = strings.TrimSpace(text)
+
+	textLen := len([]rune(text))
+	if textLen >= width {
+		// Truncate to fit
+		runes := []rune(text)
+		if width > 3 {
+			return string(runes[:width-3]) + "..."
+		}
+		return string(runes[:width])
+	}
+
+	padding := (width - textLen) / 2
+	return strings.Repeat(" ", padding) + text
 }
