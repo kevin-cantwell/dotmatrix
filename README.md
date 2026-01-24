@@ -1,155 +1,125 @@
-![image](https://cloud.githubusercontent.com/assets/307864/14945003/a928affe-0fd3-11e6-9725-ae6824be4317.png)![image](https://cloud.githubusercontent.com/assets/307864/14945005/c9b0d53a-0fd3-11e6-9b06-841eb637a2a0.png)
+# Dotmatrix
 
-****** image input ****** ****** terminal output ******
+[![Go Reference](https://pkg.go.dev/badge/github.com/kevin-cantwell/dotmatrix.svg)](https://pkg.go.dev/github.com/kevin-cantwell/dotmatrix)
 
+Convert images to Unicode braille art for terminal display.
 
-Dotmatrix is a simple and fun package & command-line utility for encoding images to all-braille unicode representations. It can be used as a standalone command-line utility or as a package. Currently jpeg, gif, png, and bmp types are supported. 
+<table>
+<tr>
+<td><strong>Input</strong></td>
+<td><strong>Output</strong></td>
+</tr>
+<tr>
+<td><img src="https://cloud.githubusercontent.com/assets/307864/14945003/a928affe-0fd3-11e6-9725-ae6824be4317.png" alt="Input image" width="300"/></td>
+<td><img src="https://cloud.githubusercontent.com/assets/307864/14945005/c9b0d53a-0fd3-11e6-9b06-841eb637a2a0.png" alt="Terminal output" width="300"/></td>
+</tr>
+</table>
 
-Animated gif support is experimental, but awesome ;)
-NOTE: Some terminals, such as iTerm2, have a poor refresh rate when playing animated gifs. This cannot be helped. The default terminal on OSX is quite speedy though. This is what it looks like:
+## Features
 
-![lemonade](https://cloud.githubusercontent.com/assets/307864/16272242/0dc3b6d8-386b-11e6-9ea3-e55ee936ae54.gif)
+- Encode JPEG, PNG, GIF, and BMP images as braille Unicode characters
+- Animated GIF support with proper frame timing and disposal methods
+- MJPEG stream support for webcams and video feeds
+- Image adjustments: gamma, brightness, contrast, sharpening
+- Floyd-Steinberg dithering for grayscale preservation
+- Automatic scaling to fit terminal dimensions
 
+## Installation
 
-[Godocs](https://godoc.org/github.com/kevin-cantwell/dotmatrix)
+```bash
+go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
+```
 
-# Usage
+## Usage
 
-## As a Package
+### Command Line
+
+```bash
+# From file
+dotmatrix image.png
+
+# From URL
+dotmatrix https://example.com/image.jpg
+
+# From stdin
+curl -s https://example.com/image.jpg | dotmatrix
+
+# With options
+dotmatrix --invert --sharpen 50 image.png
+```
+
+### As a Library
 
 ```go
+package main
+
 import (
-  "image"
-  "os"
-  "github.com/kevin-cantwell/dotmatrix"
+    "image"
+    "os"
+
+    "github.com/kevin-cantwell/dotmatrix"
 )
 
-func Encode(img image.Image) error {
-  return dotmatrix.Print(os.Stdout, img)
+func main() {
+    img, _, _ := image.Decode(os.Stdin)
+    dotmatrix.Print(os.Stdout, img)
 }
 ```
 
-## As a Command-Line Utility
+## Options
 
-#### Installation 
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--invert` | `-i` | Invert colors (for dark terminals) |
+| `--gamma` | `-g` | Adjust gamma (-1.0 to 1.0) |
+| `--brightness` | `-b` | Adjust brightness (-100 to 100) |
+| `--contrast` | `-c` | Adjust contrast (-100 to 100) |
+| `--sharpen` | `-s` | Sharpen image (0+) |
+| `--mirror` | `-m` | Flip image horizontally |
+| `--mono` | | Disable Floyd-Steinberg dithering |
+| `--motion` | `--mjpeg` | Interpret input as MJPEG stream |
+| `--framerate` | `--fps` | Set framerate for MJPEG streams |
+| `--mimeType` | `--mime` | Force specific MIME type |
 
-```
-> go get -u github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix
-> dotmatrix --help
-NAME:
-   dotmatrix - A command-line tool for encoding images as unicode braille symbols.
+## Examples
 
-USAGE:
-   1) dotmatrix [options] [file|url]
-   2) dotmatrix [options] < [file]
+### Sharpened Image
 
-VERSION:
-   0.1.0
-
-AUTHOR:
-   Kevin Cantwell <kevin.cantwell@gmail.com>
-
-COMMANDS:
-     help, h  Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --invert, -i                    Inverts image color. Useful for black background terminals
-   --gamma value, -g value         GAMMA less than 0 darkens the image and GAMMA greater than 0 lightens it. (default: 0)
-   --brightness value, -b value    BRIGHTNESS = -100 gives solid black image. BRIGHTNESS = 100 gives solid white image. (default: 0)
-   --contrast value, -c value      CONTRAST = -100 gives solid grey image. CONTRAST = 100 gives maximum contrast. (default: 0)
-   --sharpen value, -s value       SHARPEN greater than 0 sharpens the image. (default: 0)
-   --mirror, -m                    Mirrors the image.
-   --mono                          Images are drawn without Floyd Steinberg diffusion.
-   --motion, --mjpeg               Interpret input as an mjpeg stream, such as from a webcam.
-   --framerate value, --fps value  Force a framerate for mjpeg streams. Default is -1 (ie: no delay between frames). (default: -1)
-   --help, -h                      show help
-   --version, -v                   print the version
+```bash
+dotmatrix --sharpen 100 face.jpg
 ```
 
-#### Examples
-
-Given this input image:
-
-![image](https://cloud.githubusercontent.com/assets/307864/14945003/a928affe-0fd3-11e6-9725-ae6824be4317.png)
-
-And with a sharpen factor of 100 (max) you get this:
-
 ```
-$ dotmatrix --sharpen 100 < face.jpg
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣿⣜⢽⡺⣿⣿⣺⣿⣏⣿⣿⣿⣿⢿⣟⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣜⡞⣧⢅⢳⡙⣼⣻⡢⡺⡼⣻⢞⡯⣟⣽⢻⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣯⣿⣿⣿⡿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡜⣖⢔⠕⢸⡳⡢⡱⠅⡞⣽⠱⢳⢫⡟⡞⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣱⣿⣿⣵⡿⣿⣟⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣽⣷⢿⡽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⡿⡽⣿⢿⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣮⢣⢫⠀⠣⠂⢘⠐⢁⢊⠠⠉⢎⢎⢣⢿⡻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⡼⡜⡾⡯⡫⢽⢽⣗⢟⣿⣿⣿⣿⣿⣿⣿⣟⡮⣟⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⡿⡭⡺⣫⣟⡷⣟⢾⢽⢿⣟⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣎⠄⢊⢂⠠⠈⠄⠂⠀⢁⢑⠁⢜⡧⡗⢡⢮⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣜⢜⢌⢊⠈⣄⢜⢿⡫⣿⣿⣿⣿⣿⣿⣿⡿⡱⣻⢟⣿⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⢝⠔⢕⣵⢭⡿⡾⣷⣝⢮⢝⡣⣟⡝⢟⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣵⡤⠀⠀⠀⠀⠀⠀⠅⢅⠃⡕⢁⠁⡌⢙⢿⣿⣿⣿⣿⣿⣿⣿⣿⡷⠀⡔⠅⠂⠈⢈⠲⠜⣿⣿⣿⣿⣿⣿⣿⣗⢩⢻⢼⣻⣯⣿⣿⣿⣿⣿⣿⡿⣿⣿⣿
-⣿⡿⣥⡱⡕⢃⡱⢋⡯⣎⠾⣜⠳⣕⢦⠑⢕⠢⠻⡿⡻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⡀⡀⠀⠀⠀⠀⠕⠀⠀⠀⠀⠐⠀⠈⢿⣿⣿⣿⣿⣿⣿⣿⣿⡃⠡⠂⠀⠈⠄⠐⢅⢸⣿⣿⣿⣿⣿⣿⣟⢈⢯⣟⣿⣿⢿⣿⣿⣿⣿⣯⢿⣻⣿⣿
-⣿⣿⢵⡪⢂⡎⢄⠅⡒⢵⢹⢊⢋⢢⠁⠁⠂⠈⠀⠀⠀⠁⠙⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣿⣿⣷⡀⠠⠀⠀⠈⠀⠐⠢⠙⣿⣿⣿⣿⣿⣟⠔⣷⡿⡷⡽⣷⣿⣿⣿⣿⣫⢿⣻⣿⣿
-⣿⣿⣿⣿⣿⣧⣧⡬⡐⠦⠉⣉⢃⢂⠁⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣻⣿⣿⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠅⣋⣿⣿⣿⣿⣿⣿⢜⢈⣜⢯⣻⡯⣿⣿⣿⣿⢮⢷⣿⣾⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣮⣧⣅⡁⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣷⡆⠀⠀⠀⠀⠀⠀⠀⡽⣿⣿⣿⣿⢽⢂⠲⠼⢭⢾⣾⣿⣿⣿⣿⢞⣽⣾⢟⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⢧⢃⠡⢡⣡⣜⣿⣿⣿⣿⣿⢽⢿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣆⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠨⣿⣿⣿⣿⡏⡂⠀⠡⠐⢹⣽⣿⣿⣿⣻⠝⡧⣻⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⣿⣿⣿⣿⣿⣿⣿⣽⣿⣄⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣿⡧⠀⠀⠀⠀⠀⠈⣿⣿⣿⣿⡇⠀⠈⠀⡈⣐⣿⣿⣿⣿⣞⠆⡊⣻⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣽⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⢿⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡅⠀⠀⠀⠀⣐⣿⣿⣿⣿⣟⢪⣺⣿⣿⣟
-⣿⣿⣿⣽⣿⣿⡿⡿⢿⢟⠟⠻⠛⠛⠚⠛⠛⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠠⣼⣿⣿⣿⣿⢎⢮⣿⣿⡿⣾
-⣿⣿⣿⡺⡪⡊⡂⢁⠌⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠙⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠈⠙⢿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⡂⠀⠀⠀⠀⠀⣿⣿⣿⣿⠁⠀⠀⠀⢀⢼⣿⣿⣿⠽⣈⣻⣿⣿⢯⣿
-⠿⠿⣿⣺⡪⣢⡢⡡⡢⣑⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠹⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠆⠀⠀⠀⠀⠀⣿⣿⣿⣿⠀⠀⠀⠀⣰⣿⣿⣟⢟⢅⣽⣿⣿⣏⣿⣿
-⠀⠀⢽⡾⣿⣿⣿⣿⣿⣿⣗⢯⣇⢷⡵⣶⣦⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠙⠿⣿⣿⣿⣿⣿⣿⣿⣶⣄⠀⠀⠀⠀⠀⠈⢻⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠈⣿⣿⣿⣿⠂⠀⠀⠀⠀⢀⣿⣿⣿⡟⠀⠀⠀⠠⣿⣿⣟⠝⠤⡢⣻⣿⢕⣽⣿⣿
-⣴⣾⣾⣿⣟⣿⣿⣿⣿⣿⢎⢗⣵⣫⡻⣿⣿⣿⣿⣿⣶⣦⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠻⣿⣿⣿⣿⣿⣿⣷⡄⠀⠀⠀⠀⠀⠙⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⣿⣿⣿⣿⠂⠀⠀⠀⠀⢰⣿⣿⣿⠇⠀⠀⠀⣸⣿⡿⠜⠌⡷⣽⣿⡯⣷⣻⣿⠟
-⣿⣾⣿⣿⣿⣿⣿⣿⡟⣎⠪⡝⡜⡾⣺⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣦⣄⣀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣿⣿⣿⣿⣷⣆⠀⠀⠀⠀⠈⢻⣿⣿⣿⣷⠀⠀⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⣼⣿⣿⡏⠀⠀⠀⢠⣿⣯⠇⠀⣾⣿⣿⢳⣽⣿⡿⠃⢁
-⣿⣿⣿⣿⣿⣿⣿⣿⠉⠀⠀⠀⠀⠀⠀⠉⠉⠙⠛⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⣀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣷⡄⠀⠀⠀⠀⢻⣿⣿⣿⡆⠀⠀⠀⠈⣿⣿⣿⠀⠀⠀⠀⢀⣿⣿⣿⠀⠀⠀⠀⣼⡿⡞⠀⢠⣿⣿⡻⡈⣿⡿⠑⣰⣾
-⣿⣿⡟⠉⢏⢿⢏⠣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠛⠻⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⡀⠀⠀⠀⠀⠈⠹⣿⣿⣿⣿⣦⡀⠀⠀⠀⠙⣿⣿⣿⡄⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⣼⣿⣿⡏⠀⠀⠀⢰⣿⡻⠁⠀⣾⠋⢙⠄⣪⡷⠁⣸⣿⣿
-⣿⣿⡁⢐⢨⢝⠄⡕⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠙⠻⢿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣄⠀⠀⠀⠘⢿⣿⣧⠀⠀⠀⢼⣿⣿⠀⠀⠀⠀⣿⣿⣿⠃⠀⠀⠀⣼⡿⠃⠀⢰⠏⠀⢐⢴⡿⢕⣠⣿⣿⣿
-⣿⡿⠀⠀⠜⡠⡃⣬⣔⢖⡽⣺⢝⢽⢿⣿⣶⣶⣶⣤⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠙⠛⠿⣿⣿⣿⣿⣶⣦⡀⠀⠀⠀⠙⢿⣿⣿⣧⠀⠀⠀⠘⣿⣿⡄⠀⠀⢸⣿⣿⠀⠀⠀⠀⣿⣿⡟⠀⠀⢀⣼⣿⠁⠀⣠⡞⠁⠀⡰⣽⣿⣾⣿⣿⣿⣿
-⣿⠅⠀⠀⢌⢂⣾⣿⡳⡣⣏⢞⣮⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⠿⣿⣿⣿⣦⣀⠀⠀⠈⠻⣿⣿⣷⡄⠀⠀⠹⣿⣷⡀⠀⠘⣿⣿⡄⠀⠀⢸⣿⡿⠀⠀⠀⢸⣿⠋⠀⣰⡟⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⠟
-⣿⠂⢀⣠⣾⢾⣿⣿⡝⣮⢳⡹⣼⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣤⣀⡀⠀⠀⠀⠀⠀⠀⠉⠙⠻⢿⣷⣦⡀⠀⠈⠙⣿⣿⣦⣄⠀⠉⢻⣧⠀⠀⠙⣿⡇⠀⠀⢼⡿⠋⠀⢠⡾⠛⠁⢠⡖⠋⠀⠀⣠⣿⣿⡿⢱⣿⣿⠟⠁⠀
-⣿⡕⢩⣯⣞⣿⣿⣿⠚⠈⠁⠁⠁⠉⠉⠉⠉⠛⠛⠛⠛⢛⢛⢛⢛⠛⠛⠛⠟⠟⠿⣿⣿⣿⣿⣿⣶⣶⣤⣀⡀⠀⠀⠀⠀⠈⠙⢿⣶⣄⡀⠀⠙⢿⣿⣦⡀⠀⢻⣆⣀⣠⣿⣧⣤⣤⣿⣀⣀⣴⠟⠀⣠⡴⠟⠀⠀⢀⣰⣿⡿⠕⠈⠐⠉⠀⠀⠀⠀
-⣿⣶⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⢹⣽⣿⣿⡿⢟⢿⣿⣿⣿⣿⣶⣶⣶⣴⣌⠍⠋⠛⠛⠛⠻⠿⠿⢶⣦⣤⣄⣀⠀⠈⠉⠛⠲⢲⢔⡽⣿⣷⣿⣿⣿⣿⣿⣿⣿⣿⠛⠿⣿⣿⣿⠏⠋⠉⠀⣀⣤⣶⣿⣿⡯⠋⠀⠠⣟⠀⠀⠀⠀⢀
-⣿⣿⣿⣿⣿⡿⡝⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣫⣻⡟⠣⠀⠘⢻⡝⠛⠙⣽⠋⠙⢿⣿⣿⣮⣤⡂⠀⠀⠀⠀⠀⠀⠈⠉⠉⠛⠛⠛⠚⢋⣉⣥⡾⣿⣿⠑⠈⠿⣍⣉⣩⠾⠁⠀⠈⢋⣻⣮⣵⣷⣾⣿⣿⣿⣿⠿⠛⠀⠀⠀⡨⣿⠄⢀⣠⣾⣿
-⣿⣿⣿⠉⠈⡊⢪⠀⠀⠀⠀⣀⣀⣄⣤⣤⣴⣶⣾⣿⣿⣿⣶⣤⣀⡀⠈⠁⠉⠀⢀⢀⣈⢷⣿⣿⣿⣿⣷⣦⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⡖⠋⠉⢁⣼⠛⠝⢵⣤⣤⣤⣥⣀⣤⣤⣴⣾⠿⠿⠟⠛⠉⠉⠉⠉⠀⠀⠀⠀⠀⢀⡴⣧⣿⣿⣾⣿⣿⣿
-⣿⣿⣿⣷⡠⠀⠅⠅⢀⣔⢾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠟⠁⠀⠀⠀⠈⠛⠛⠛⠛⠋⠛⠙⠋⠉⠉⠁⢀⣶⣾⠟⠋⣠⠴⢩⢾⣿⢿⡧⡉⠳⢧⣤⣄⣀⣀⣀⣠⣤⣤⣤⣤⣤⣦⣶⣶⣾⣿⢯⢿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣷⣶⣬⣶⢕⣝⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠟⠛⠛⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡿⠋⢁⡴⠊⣡⠔⡃⢐⡞⠈⢧⠸⣦⣤⡈⠉⠋⠛⠛⠛⠛⠛⠛⠟⠿⠿⠿⠿⠛⠉⠈⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣗⢼⣺⣿⣿⣿⣿⣿⣿⠿⠿⠛⠛⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣤⣤⣶⣾⣿⡿⠟⠀⣠⠋⠀⡸⠁⡔⠁⡯⡐⡇⠸⡄⠉⢻⣿⣷⣦⣄⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡳⣝⡿⠛⠋⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣶⣶⣾⣿⣿⣿⣿⣿⣿⠿⠛⠋⠉⠀⢠⣴⠃⢠⡾⠁⡞⠀⢸⡇⣇⠱⣄⠹⣄⠀⠈⠙⠻⢿⣿⣿⣿⣾⣷⣶⣶⣶⣶⣦⢄⢆⣾⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣶⣿⣿⣿⣿⣿⡿⠿⠛⠛⠉⠁⠀⠀⠀⠀⣠⣴⡿⠁⣰⣿⠃⢰⠇⠀⣾⡇⢹⡄⠹⡇⠹⣷⣄⡀⠀⠀⠀⠙⠻⠿⣿⣿⣿⣿⣿⣿⣣⢻⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣤⣶⣶⣿⣿⣿⣿⣿⠿⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣾⡿⠋⠀⣰⣿⠃⠀⣼⠀⢀⣿⡇⠸⣷⠀⢹⣄⠙⠻⣷⣦⣄⠀⠀⠀⠀⠀⠉⠙⠛⠛⠟⠜⢽⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⢀⣤⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⣿⠟⠀⠀⢠⣿⠇⠀⢰⡗⠀⢐⣿⡇⠀⣿⡇⠀⢻⣆⠀⠘⣿⣿⣷⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⢀⣤⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣾⣿⣿⣿⠗⠁⠀⠀⣠⣾⣿⠀⠀⣽⠃⠀⢘⣿⡇⠀⢹⣿⡄⠈⢻⣷⡄⠀⠙⠻⣿⣿⣿⣶⣄⡀⠀⠀⠀⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣾⣿⣿⣿⣿⠟⠁⠀⠀⠀⣴⣿⣿⡇⠀⠀⣿⠀⠀⢸⣿⣷⠀⠀⣿⣧⠀⠀⢿⣿⡀⠀⠀⠈⠿⣿⣿⣿⣿⣿⣶⡷⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣾⣿⣿⣯⣿⠟⠛⠁⠀⠀⠀⢀⣼⣿⣿⣿⠃⠀⢀⣿⠂⠀⢸⣿⣿⠀⠀⢻⣿⡄⠀⠈⢿⣿⣆⡀⠀⠀⠈⠛⢿⣿⣿⣿⠝⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⣤⣾⣿⣿⣿⣿⣿⢋⠡⣤⡀⠀⠀⠀⢠⣾⣿⣿⡟⣃⣠⣤⣾⠋⠀⠀⣼⣿⣿⠀⠀⠈⣿⣷⡀⠀⠘⣿⣿⣷⡄⠀⠀⠀⠀⠉⠉⠁⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣿⣿⣿⣿⣿⠟⠉⠀⠉⠑⠩⠙⣲⣴⣾⣿⣿⡟⠋⠙⠉⣿⣿⠇⠀⠀⠀⢿⣿⣿⡀⠀⠀⢹⣿⣷⡀⠀⠙⢿⣿⣿⣦⣄⡀⠀⠀⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣾⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⠁⠀⠀⠀⢠⣿⣿⠃⠀⠀⠀⢸⣿⣿⣇⠀⠀⠘⣿⣿⣧⠀⠀⠀⠻⣿⣿⣿⣿⣷⣿⣾⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⣸⣿⣿⠀⠀⠀⠀⢘⣿⣿⣿⣆⠀⠀⢻⣿⣿⣧⠀⠀⠀⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⣿⣿⣿⣿⡄⠀⠀⢻⣿⣿⡄⠀⠀⠀⠀⠈⠙⠙⣩⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⡀⣀⣼⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⢰⣿⣿⣿⠀⠀⠀⠀⠀⣿⣿⣿⣿⣷⠀⠀⠈⢿⣿⣿⣦⡀⠀⠀⠀⠀⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀⢠⣠⣀⣄⣤⣾⣿⣿⣿⣿⣿⡂⠀⠀⠀⠀⢀⣿⣿⣿⣿⡀⠀⠀⡀⣠⣿⣿⣿⣿⣿⡆⠀⠀⠈⢿⣿⣿⣿⣦⡀⢀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⠿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠈⠉⢹⣿⣿⣿⣿⣿⣿⠟⠛⠛⠛⠚⠛⣻⣿⣿⣿⣿⠛⠙⠚⠛⠙⢿⣿⣿⣿⣿⣧⠀⠀⠀⠘⣿⣿⣿⣿⠟⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡯⢊⢹⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠸⣿⣿⣿⣿⣿⡄⠀⠀⠀⠙⣿⣿⠃⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢏⠄⠀⠝⡁⠀⠀⠀⠀⠀⠀⠀⢠⣾⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⠄⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⣿⡄⠀⠀⠀⣸⡅⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣳⣿⣿⠅⡀⠂⠅⠢⡂⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⣿⣿⡟⠡⠪⣒⢲⡲⣔⢖⣾⣿⣿⣿⣿⣿⡂⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⡀⢠⣾⣿⣿⣄⠀⠀⠀⢽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⣗⢷⣿⣿⠐⠀⠠⠁⡑⠨⡂⡀⠀⠀⣴⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⠈⠀⠁⣿⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠈⢿⣿⣿⣿⣿⣿⣷⣿⣿⣿⣿⣷⣆⠄⠀⠀⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⢣⡫⣞⣟⣿⢷⡡⠁⠠⠁⠄⠅⡊⢶⣀⣺⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠠⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠘⣿⣿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⡂⠀⠀⢈⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⡟⢝⢜⢜⢼⡳⣯⢿⣝⠆⡀⠂⢁⠐⡀⡊⣺⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠐⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠸⠋⠁⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣮⡢⠀⠀⢀⠑⢛⠿⡿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⡿⡻⡹⢨⢘⢌⠆⡧⣳⣫⢯⣟⢮⠢⠀⠂⡀⠂⠠⢨⢺⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠨⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠔⡈⠄⠁⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⡨⡐⠀⡐⡀⡂⡑⠝⡿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⡿⡟⡝⠜⡌⠪⡐⠅⡆⡇⣗⢵⣫⢗⡽⡪⢂⠁⢂⠠⠁⠨⢐⢽⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢘⣿⣿⣿⣿⣿⣿⣿⣿⣧⢀⢀⠂⠅⡁⠄⠂⠀⠀⠀⠀⠈⠻⣿⣿⣿⣿⣿⣿⣿⣗⡦⡡⠠⡐⠠⢂⢑⠌⢎⠻⡻⣿⣿
-⣿⡿⡫⡣⡱⡨⢌⠪⠨⡊⢔⢑⢜⢜⢼⢕⣯⡳⣝⢜⠄⡈⠠⠀⠌⠠⢁⠳⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⢀⠀⠀⠀⠀⠀⠀⢨⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⠁⠌⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠐⠻⣿⣿⣿⣿⣿⣿⣽⢮⢱⠠⡑⡐⡐⠡⡡⡑⢅⢇⢟
-⡣⢣⢃⠪⡂⠪⡐⢌⠪⡐⢅⠪⡢⡳⡹⣝⢮⢞⢎⠆⠅⡐⢀⢁⠈⡐⢀⠑⡿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣑⠳⣕⣖⢤⢤⢤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⠡⢀⠀⡀⠁⡀⠀⠀⠀⠀⠀⠀⠀⠙⠿⡿⣿⣿⣿⣿⣯⢧⡣⡂⡢⢈⢂⠢⠨⢂⠪⠢
-⡘⢔⠡⡑⠌⡌⢔⠐⢅⠢⡡⢣⢱⢹⣪⡳⣝⡕⡇⡇⠅⠂⡂⠐⡀⢂⠐⡈⢜⣿⣿⣿⣿⣿⣿⣿⣿⣿⡢⡫⡒⣕⢝⢕⢇⢯⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣯⡂⠄⡀⠂⠀⠐⠈⠀⠀⠂⠀⠀⠀⠀⠍⢝⢟⣿⣿⣿⣿⡺⣜⢔⠡⡂⠌⠌⡐⠡⡑
-⠌⡢⢑⠨⠨⡐⡐⡡⢁⠪⡐⡱⡸⡸⡲⣹⡪⡺⡸⡐⡁⠡⠀⢂⠐⢐⢀⢂⢘⢾⣿⣿⣿⣿⣿⣿⣿⣿⡇⡇⡇⡇⡕⡑⡕⡱⡹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⡅⠄⠄⠂⠐⠀⠐⠀⠀⠀⠀⠀⠐⠈⡈⠪⢳⢻⣯⣷⡿⣧⣳⡱⡨⡂⠅⠌⡂⠌
-⠨⡐⠔⠡⡑⡐⠌⢔⠡⡑⢌⢎⢎⢎⣏⢮⡪⡣⡣⡊⠄⡡⠈⠄⠂⡐⢀⠂⠢⡹⣿⣿⣿⣿⣿⣿⣿⣿⣯⡪⡎⡇⡇⡣⡱⡨⡘⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡡⢂⠐⠀⡀⠀⠠⠐⠀⠂⠐⠀⠀⠠⠨⢘⠸⡸⡪⣟⣿⣺⣵⢳⡘⠌⠔⢐⠡
-⠡⢊⠌⠌⢔⢨⠨⡢⢑⠌⡎⡆⣗⢕⢧⢳⢱⢱⢑⠌⡂⠄⠅⠌⢐⠀⡂⠌⢌⠪⣿⣿⣿⣿⣿⣿⣿⣿⣿⣺⡸⡱⡑⡕⢌⢆⠕⡽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣕⢄⢁⠀⠀⠀⠀⠀⠀⠀⠄⠂⠀⠂⠂⡑⠨⢊⢳⢝⣿⣺⢧⡇⡇⡕⡐⠄
-⢌⢂⢪⠨⡢⡡⡱⡘⡌⡪⡸⡸⡸⡜⡎⡎⡮⡪⢢⠑⢄⢑⠨⠐⡐⢀⠂⠡⠂⢕⣻⣿⣿⣿⣿⣿⣿⣿⣿⡷⡕⡕⢌⠪⡊⡢⠡⢣⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣮⢀⠂⠁⠐⠀⠀⠀⠀⡀⠠⠐⠀⠁⡀⠌⢂⢕⢝⢮⣟⣯⣯⡺⡔⢔⠡
-⣢⡣⣕⢕⣕⢜⢬⢢⢣⢱⢱⢱⢱⢱⢱⢱⢱⢑⠅⡊⡐⡐⠠⠡⠐⠠⢈⠨⢈⠢⢽⣿⣿⣿⣿⣿⣿⣿⣿⣿⡳⡨⠂⠕⠨⠨⠊⠄⡱⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡵⣌⠔⠀⠂⠈⠀⢀⠀⠠⠐⢈⠠⢐⠐⠔⡌⢎⡳⣝⢾⣺⢵⡫⡢⡕
-⡳⡹⡪⢯⢺⢹⢱⢝⢎⢇⢧⢓⢕⢕⢕⢱⢑⠬⡨⢐⢐⠠⢑⠈⠌⢐⠀⢂⠐⡈⢮⣿⣿⣿⣿⣿⣿⣿⣿⣿⣗⢅⠅⢁⠁⠡⢑⢀⠂⡑⠸⢽⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡵⣝⢬⢈⠄⠁⠄⡀⢂⠨⢐⠨⡢⡣⡣⣣⢳⡹⡜⣝⢞⢽⡺⡝⣞
-⠪⡊⡪⢊⠜⡘⠌⢆⠣⡃⢇⠇⢇⠇⡇⡣⡱⢑⢌⠢⡂⢅⠢⠨⠈⠄⡈⠠⠐⠀⢕⢿⣿⣿⣿⣿⣿⣿⣿⣿⣟⡆⠅⠠⠈⠐⢐⢐⠨⢀⠅⠊⠕⡻⡻⣿⣿⣿⣿⣿⣿⣿⣿⡿⣯⣟⡷⣕⡥⡱⡐⠄⢅⢊⢂⠣⡱⢘⠜⢌⠢⡃⡣⡑⢕⠱⡑⡑⡑
-⠑⠐⠌⠔⠨⠐⠡⠡⠈⠢⠁⠪⠐⠑⠌⠢⠊⠢⠢⠑⠌⠂⠌⠌⠌⠂⠄⠡⠈⠨⠨⠳⠻⠿⠿⠿⠿⠿⠿⠿⠿⠸⠀⠂⠀⠁⠐⠠⠨⠐⠠⠈⠐⠠⠙⠞⠾⠝⠯⠯⠟⠽⠳⠫⠟⠎⠯⠺⠪⠏⠮⠑⠅⠂⠅⠅⠊⠄⠕⠠⠑⠐⠔⠨⠠⠑⠐⠌⠌
 ```
 
-## Internals
+### Animated GIF
 
-The input image is decoded and treated with Floyd Steinberg image diffusion in order to capture gray tones in monochrome. Each pixel is then mapped to a matrix of braille Unicode points and the braille symbols are written to an `io.Writer` in such a way as they appear to reconstruct the image, pixel-for-pixel. Each pixel is mapped to a monochrome color (black or white) depending on a fairly standard RGB luminosity algorithm.
+Animated GIFs play directly in the terminal with proper timing:
 
-The command-line utility determines the resolution of the output based on the number of columns in the current terminal, so if you make your terminal wider you may get a higher-resolution picture.
+![Animated GIF example](https://cloud.githubusercontent.com/assets/307864/16272242/0dc3b6d8-386b-11e6-9ea3-e55ee936ae54.gif)
 
-[*Some interesting reading on how braille unicode points work.*](https://en.wikipedia.org/wiki/Braille_Patterns#Identifying.2C_naming_and_ordering)
+> **Note:** Terminal refresh rates vary. The default macOS Terminal.app works well; iTerm2 may have slower refresh rates.
 
+## How It Works
+
+Dotmatrix uses [Unicode Braille Patterns](https://en.wikipedia.org/wiki/Braille_Patterns) (U+2800 to U+28FF) to represent images. Each braille character encodes a 2x4 pixel grid, allowing 256 possible patterns per character.
+
+**Processing pipeline:**
+
+1. **Decode** - Parse input image (JPEG, PNG, GIF, BMP)
+2. **Filter** - Apply brightness, contrast, gamma, sharpening adjustments
+3. **Scale** - Resize to fit terminal dimensions (2 pixels per column, 4 pixels per row)
+4. **Dither** - Convert to monochrome using Floyd-Steinberg diffusion
+5. **Encode** - Map each 2x4 pixel block to a braille character
+6. **Render** - Output braille characters with newlines
+
+The Floyd-Steinberg dithering algorithm distributes quantization errors to neighboring pixels, preserving the appearance of grayscale gradients in the monochrome output.
+
+## License
+
+MIT
