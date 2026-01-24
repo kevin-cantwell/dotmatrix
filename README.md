@@ -20,6 +20,7 @@ Convert images to Unicode braille art for terminal display.
 - Encode JPEG, PNG, GIF, and BMP images as braille Unicode characters
 - Animated GIF support with proper frame timing and disposal methods
 - MP4 video playback with H.264 decoding (requires FFmpeg)
+- Embedded subtitle rendering for MP4 files (mov_text format)
 - MJPEG stream support for webcams and video feeds
 - Image adjustments: gamma, brightness, contrast, sharpening
 - Floyd-Steinberg dithering for grayscale preservation
@@ -67,7 +68,7 @@ curl -s https://example.com/image.jpg | dotmatrix
 # With options
 dotmatrix --invert --sharpen 50 image.png
 
-# Play MP4 video
+# Play MP4 video (subtitles are displayed if embedded)
 dotmatrix video.mp4
 
 # Play MP4 at specific framerate
@@ -130,6 +131,14 @@ Animated GIFs play directly in the terminal with proper timing:
 ![Animated GIF example](https://cloud.githubusercontent.com/assets/307864/16272242/0dc3b6d8-386b-11e6-9ea3-e55ee936ae54.gif)
 
 > **Note:** Terminal refresh rates vary. The default macOS Terminal.app works well; iTerm2 may have slower refresh rates.
+
+### MP4 Subtitles
+
+MP4 files with embedded subtitles (mov_text/tx3g format) will display subtitles overlaid at the bottom of the video. Subtitles are:
+
+- Automatically extracted and timed to video playback
+- Centered and wrapped to fit the terminal width
+- Rendered over the braille output while preserving surrounding pixels
 
 ## How It Works
 
