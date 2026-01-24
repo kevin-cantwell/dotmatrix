@@ -101,18 +101,20 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 	var swsCtx *astiav.SoftwareScaleContext
 	var dstFrame *astiav.Frame
 
-	// Calculate frame timing
+	// Get stream time base for timing calculations
+	timeBase := videoStream.TimeBase()
+
+	// Calculate frame duration for fixed fps mode
 	var frameDuration time.Duration
 	if fps > 0 {
 		frameDuration = time.Second / time.Duration(fps)
 	}
 
-	// Get stream time base for native timing
-	timeBase := videoStream.TimeBase()
-
 	var rows int
-	var lastFrameTime time.Time
-	var lastPTS int64
+	var playbackStart time.Time  // Wall clock time when playback started
+	var firstPTS int64           // PTS of the first frame
+	var frameCount int64         // Frame counter for fixed fps mode
+	var initialized bool
 
 	// Read packets
 	for {
@@ -195,35 +197,35 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 				return fmt.Errorf("mp4: converting frame to image failed: %w", err)
 			}
 
-			// Handle frame timing
+			// Initialize timing on first frame
+			if !initialized {
+				playbackStart = time.Now()
+				firstPTS = frame.Pts()
+				initialized = true
+			}
+
+			// Calculate target display time and wait if needed
+			var targetTime time.Time
 			if fps > 0 {
-				// Use fixed framerate
-				if !lastFrameTime.IsZero() {
-					elapsed := time.Since(lastFrameTime)
-					if sleep := frameDuration - elapsed; sleep > 0 {
-						select {
-						case <-ctx.Done():
-							frame.Unref()
-							return ctx.Err()
-						case <-time.After(sleep):
-						}
-					}
-				}
-			} else if fps < 0 && lastPTS > 0 {
-				// Use native video timing from PTS
-				ptsDiff := frame.Pts() - lastPTS
-				delay := time.Duration(float64(ptsDiff) * float64(timeBase.Num()) / float64(timeBase.Den()) * float64(time.Second))
-				if delay > 0 {
-					select {
-					case <-ctx.Done():
-						frame.Unref()
-						return ctx.Err()
-					case <-time.After(delay):
-					}
+				// Fixed framerate: target time based on frame count
+				targetTime = playbackStart.Add(time.Duration(frameCount) * frameDuration)
+			} else if fps < 0 {
+				// Native timing: target time based on PTS
+				ptsDiff := frame.Pts() - firstPTS
+				videoTime := time.Duration(float64(ptsDiff) * float64(timeBase.Num()) / float64(timeBase.Den()) * float64(time.Second))
+				targetTime = playbackStart.Add(videoTime)
+			}
+
+			// Sleep until target time (if we're ahead of schedule)
+			if sleepDuration := time.Until(targetTime); sleepDuration > 0 {
+				select {
+				case <-ctx.Done():
+					frame.Unref()
+					return ctx.Err()
+				case <-time.After(sleepDuration):
 				}
 			}
-			lastFrameTime = time.Now()
-			lastPTS = frame.Pts()
+			frameCount++
 
 			// Apply filters and convert to paletted
 			filteredImg := redraw(img, p.c.Filter, p.c.Drawer)
