@@ -21,7 +21,7 @@ Convert images to Unicode braille art for terminal display.
 - Animated GIF support with proper frame timing and disposal methods
 - MP4 video playback with H.264 decoding (requires FFmpeg)
 - Embedded subtitle rendering for MP4 files (mov_text format)
-- MJPEG stream support for webcams and video feeds
+- Native webcam capture on macOS (AVFoundation)
 - Image adjustments: gamma, brightness, contrast, sharpening
 - Floyd-Steinberg dithering for grayscale preservation
 - Automatic scaling to fit terminal dimensions
@@ -73,6 +73,12 @@ dotmatrix video.mp4
 
 # Play MP4 at specific framerate
 dotmatrix --fps 15 video.mp4
+
+# Capture from webcam (macOS only)
+dotmatrix --webcam
+
+# Webcam with options
+dotmatrix --webcam --invert --fps 15
 ```
 
 ### As a Library
@@ -104,8 +110,8 @@ func main() {
 | `--sharpen` | `-s` | Sharpen image (0+) |
 | `--mirror` | `-m` | Flip image horizontally |
 | `--mono` | | Disable Floyd-Steinberg dithering |
-| `--motion` | `--mjpeg` | Interpret input as MJPEG stream |
-| `--framerate` | `--fps` | Set framerate for video playback (MP4/MJPEG) |
+| `--webcam` | `-w` | Capture from webcam (macOS only) |
+| `--framerate` | `--fps` | Set framerate for video/webcam playback |
 | `--mimeType` | `--mime` | Force specific MIME type |
 
 ## Examples
