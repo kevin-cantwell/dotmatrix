@@ -19,6 +19,7 @@ Convert images to Unicode braille art for terminal display.
 
 - Encode JPEG, PNG, GIF, and BMP images as braille Unicode characters
 - Animated GIF support with proper frame timing and disposal methods
+- MP4 video playback with H.264 decoding (requires FFmpeg)
 - MJPEG stream support for webcams and video feeds
 - Image adjustments: gamma, brightness, contrast, sharpening
 - Floyd-Steinberg dithering for grayscale preservation
@@ -26,8 +27,27 @@ Convert images to Unicode braille art for terminal display.
 
 ## Installation
 
+### Pre-built Binary
+
 ```bash
 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
+```
+
+### Building with MP4 Support
+
+MP4 playback requires FFmpeg development libraries and CGO.
+
+**macOS:**
+```bash
+brew install ffmpeg
+PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig" CGO_ENABLED=1 go build -o dotmatrix ./cmd/dotmatrix
+codesign -s - dotmatrix  # Ad-hoc sign to prevent "Killed: 9" errors
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+CGO_ENABLED=1 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
 ```
 
 ## Usage
@@ -46,6 +66,12 @@ curl -s https://example.com/image.jpg | dotmatrix
 
 # With options
 dotmatrix --invert --sharpen 50 image.png
+
+# Play MP4 video
+dotmatrix video.mp4
+
+# Play MP4 at specific framerate
+dotmatrix --fps 15 video.mp4
 ```
 
 ### As a Library
@@ -78,7 +104,7 @@ func main() {
 | `--mirror` | `-m` | Flip image horizontally |
 | `--mono` | | Disable Floyd-Steinberg dithering |
 | `--motion` | `--mjpeg` | Interpret input as MJPEG stream |
-| `--framerate` | `--fps` | Set framerate for MJPEG streams |
+| `--framerate` | `--fps` | Set framerate for video playback (MP4/MJPEG) |
 | `--mimeType` | `--mime` | Force specific MIME type |
 
 ## Examples
@@ -111,12 +137,12 @@ Dotmatrix uses [Unicode Braille Patterns](https://en.wikipedia.org/wiki/Braille_
 
 **Processing pipeline:**
 
-1. **Decode** - Parse input image (JPEG, PNG, GIF, BMP)
+1. **Decode** - Parse input (JPEG, PNG, GIF, BMP, or MP4 video)
 2. **Filter** - Apply brightness, contrast, gamma, sharpening adjustments
 3. **Scale** - Resize to fit terminal dimensions (2 pixels per column, 4 pixels per row)
 4. **Dither** - Convert to monochrome using Floyd-Steinberg diffusion
 5. **Encode** - Map each 2x4 pixel block to a braille character
-6. **Render** - Output braille characters with newlines
+6. **Render** - Output braille characters with newlines (for video, frames are rendered in sequence)
 
 The Floyd-Steinberg dithering algorithm distributes quantization errors to neighboring pixels, preserving the appearance of grayscale gradients in the monochrome output.
 
