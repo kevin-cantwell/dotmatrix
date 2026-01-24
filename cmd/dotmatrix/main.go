@@ -36,7 +36,7 @@ func main() {
 	app := &cli.App{
 		Name:            "dotmatrix",
 		Usage:           "Render images and video as Unicode braille art",
-		Version:         "0.1.1",
+		Version:         "0.2.0",
 		UsageText:       "dotmatrix [options] [file|url]\ncat [file|url] | dotmatrix [options]",
 		HideHelpCommand: true,
 		Flags: []cli.Flag{
