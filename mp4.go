@@ -298,14 +298,39 @@ func (p *MP4Printer) Print(ctx context.Context, inputPath string, fps int) error
 				}
 			}
 
-			// Overlay subtitle on the last row of the braille output
+			// Overlay subtitle on the bottom rows of the braille output
 			imageWidthInChars := filteredImg.Bounds().Dx() / 2
 			currentPTS := frame.Pts()
 			activeSubtitle := findActiveSubtitle(subtitles, currentPTS)
 			if activeSubtitle != "" {
-				centered := centerText(activeSubtitle, imageWidthInChars)
-				// Move cursor up 1 line, to beginning, write subtitle, then back down
-				fmt.Fprintf(p.w, "\033[1A\r%s\033[1B\r", centered)
+				// Wrap and limit subtitle lines (max 3 lines, leave 1 line of braille visible at top minimum)
+				maxLines := 3
+				if rows-1 < maxLines {
+					maxLines = rows - 1
+				}
+				if maxLines < 1 {
+					maxLines = 1
+				}
+				lines := wrapText(activeSubtitle, imageWidthInChars, maxLines)
+				numLines := len(lines)
+
+				// Move cursor up to position subtitles at the bottom of the frame
+				// We go up (numLines) lines from the current position (which is after the last row)
+				fmt.Fprintf(p.w, "\033[%dA", numLines)
+
+				// Write each line centered
+				for i, line := range lines {
+					centered := centerText(line, imageWidthInChars)
+					fmt.Fprintf(p.w, "\r%s", centered)
+					if i < numLines-1 {
+						fmt.Fprint(p.w, "\n")
+					}
+				}
+
+				// Move cursor back down to the original position
+				// We're now on the last subtitle line (which is the last row of the frame)
+				// So we only need to move down 1 line to get back to where we started
+				fmt.Fprint(p.w, "\033[1B\r")
 			}
 
 			p.c.Reset(p.w, rows)
@@ -324,20 +349,90 @@ func findActiveSubtitle(subtitles []subtitle, pts int64) string {
 	return ""
 }
 
-// centerText centers text within the given width, truncating if necessary.
+// centerText centers text within the given width (assumes text already fits).
 func centerText(text string, width int) string {
-	text = strings.TrimSpace(text)
-
 	textLen := len([]rune(text))
 	if textLen >= width {
-		// Truncate to fit
-		runes := []rune(text)
-		if width > 3 {
-			return string(runes[:width-3]) + "..."
-		}
-		return string(runes[:width])
+		return text
 	}
-
 	padding := (width - textLen) / 2
 	return strings.Repeat(" ", padding) + text
+}
+
+// wrapText wraps text to fit within width, limiting to maxLines.
+// If text exceeds maxLines, the last line is truncated with ellipsis.
+func wrapText(text string, width, maxLines int) []string {
+	if width <= 0 || maxLines <= 0 {
+		return nil
+	}
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	var currentLine string
+
+	for _, word := range words {
+		wordRunes := []rune(word)
+
+		// If single word is longer than width, we need to handle it specially
+		if len(wordRunes) > width {
+			// Flush current line if not empty
+			if currentLine != "" {
+				lines = append(lines, currentLine)
+				currentLine = ""
+			}
+
+			// Break the long word across lines
+			for len(wordRunes) > 0 {
+				if len(lines) >= maxLines {
+					break
+				}
+				take := width
+				if take > len(wordRunes) {
+					take = len(wordRunes)
+				}
+				lines = append(lines, string(wordRunes[:take]))
+				wordRunes = wordRunes[take:]
+			}
+			continue
+		}
+
+		// Check if word fits on current line
+		if currentLine == "" {
+			currentLine = word
+		} else if len([]rune(currentLine))+1+len(wordRunes) <= width {
+			currentLine += " " + word
+		} else {
+			// Word doesn't fit, start new line
+			lines = append(lines, currentLine)
+			currentLine = word
+		}
+	}
+
+	// Don't forget the last line
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	// Limit to maxLines and add ellipsis if truncated
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		// Add ellipsis to last line
+		lastLine := []rune(lines[maxLines-1])
+		if len(lastLine)+3 <= width {
+			lines[maxLines-1] = string(lastLine) + "..."
+		} else if len(lastLine) > 3 {
+			lines[maxLines-1] = string(lastLine[:len(lastLine)-3]) + "..."
+		}
+	}
+
+	return lines
 }
