@@ -28,7 +28,19 @@ Convert images to Unicode braille art for terminal display.
 
 ## Installation
 
-### Pre-built Binary
+### Pre-built Binaries
+
+Download from [GitHub Releases](https://github.com/kevin-cantwell/dotmatrix/releases). Binaries are available for:
+- Linux (amd64)
+- macOS (arm64, amd64)
+
+**macOS users:** The binaries are not signed with an Apple Developer account. After downloading, remove the quarantine attribute:
+
+```bash
+xattr -d com.apple.quarantine dotmatrix
+```
+
+### Install with Go
 
 ```bash
 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
