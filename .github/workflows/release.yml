@@ -15,16 +15,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            goos: linux
-            goarch: amd64
             artifact: dotmatrix-linux-amd64
           - os: macos-14
-            goos: darwin
-            goarch: arm64
             artifact: dotmatrix-darwin-arm64
-          - os: macos-15
-            goos: darwin
-            goarch: amd64
+          - os: macos-13-large
             artifact: dotmatrix-darwin-amd64
 
     runs-on: ${{ matrix.os }}
@@ -60,8 +54,6 @@ jobs:
       - name: Build
         env:
           CGO_ENABLED: 1
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
         run: |
           go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dotmatrix ./cmd/dotmatrix
 
