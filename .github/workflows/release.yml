@@ -16,9 +16,9 @@ jobs:
         include:
           - os: ubuntu-24.04
             artifact: dotmatrix-linux-amd64
-          - os: macos-14
+          - os: macos-15
             artifact: dotmatrix-darwin-arm64
-          - os: macos-13-large
+          - os: macos-15-intel
             artifact: dotmatrix-darwin-amd64
 
     runs-on: ${{ matrix.os }}
