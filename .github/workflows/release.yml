@@ -75,8 +75,8 @@ jobs:
       - name: Build with static FFmpeg
         env:
           CGO_ENABLED: 1
-          PKG_CONFIG_PATH: ${{ github.workspace }}/../ffmpeg/lib/pkgconfig:$HOME/ffmpeg/lib/pkgconfig
         run: |
+          export PKG_CONFIG_PATH="$HOME/ffmpeg/lib/pkgconfig"
           export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           export CGO_CFLAGS="$(pkg-config --cflags libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dotmatrix ./cmd/dotmatrix
