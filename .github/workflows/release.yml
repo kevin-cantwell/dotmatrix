@@ -37,21 +37,21 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Install FFmpeg from source (Linux)
+      - name: Install FFmpeg 8.0.1 from source (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y nasm yasm libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev
-          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
-          cd ffmpeg-src
+          curl -L https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz | tar -xJ
+          cd ffmpeg-8.0.1
           ./configure --enable-gpl --enable-nonfree --enable-libx264 --enable-libx265 --enable-libvpx --enable-libfdk-aac --enable-libmp3lame --enable-libopus --enable-shared --prefix=/usr/local
           make -j$(nproc)
           sudo make install
           sudo ldconfig
 
-      - name: Install FFmpeg from HEAD (macOS)
+      - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'
-        run: brew install --HEAD ffmpeg
+        run: brew install ffmpeg
 
       - name: Get version from tag
         id: version
