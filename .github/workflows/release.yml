@@ -46,9 +46,7 @@ jobs:
 
       - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'
-        run: |
-          brew install ffmpeg@6
-          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg@6)/lib/pkgconfig" >> $GITHUB_ENV
+        run: brew install ffmpeg
 
       - name: Get version from tag
         id: version
