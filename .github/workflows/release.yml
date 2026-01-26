@@ -64,6 +64,14 @@ jobs:
             --enable-libvorbis \
             --enable-static \
             --disable-shared \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-libxcb-shm \
+            --disable-libxcb-xfixes \
+            --disable-libxcb-shape \
+            --disable-sdl2 \
+            --disable-ffplay \
+            --disable-ffprobe \
             --prefix=$HOME/ffmpeg
           make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
           make install
