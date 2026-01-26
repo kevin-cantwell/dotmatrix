@@ -37,16 +37,21 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Install FFmpeg (Linux)
+      - name: Install FFmpeg from source (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
           sudo apt-get update
-          sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
+          sudo apt-get install -y nasm yasm libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
+          cd ffmpeg-src
+          ./configure --enable-gpl --enable-nonfree --enable-libx264 --enable-libx265 --enable-libvpx --enable-libfdk-aac --enable-libmp3lame --enable-libopus --enable-shared --prefix=/usr/local
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
 
-      - name: Install FFmpeg (macOS)
+      - name: Install FFmpeg from HEAD (macOS)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: brew install --HEAD ffmpeg
 
       - name: Get version from tag
         id: version

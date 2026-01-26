@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
-	github.com/asticode/go-astiav v0.33.0
+	github.com/asticode/go-astiav v0.40.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.36.2
