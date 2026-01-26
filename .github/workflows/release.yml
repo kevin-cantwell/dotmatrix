@@ -46,6 +46,12 @@ jobs:
 
       - name: Build FFmpeg 8.0.1 with static libraries
         run: |
+          # Set up paths for homebrew on macOS
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:$(brew --prefix lame)/lib/pkgconfig:$(brew --prefix opus)/lib/pkgconfig:$(brew --prefix libvorbis)/lib/pkgconfig:$(brew --prefix x264)/lib/pkgconfig:$(brew --prefix x265)/lib/pkgconfig:$(brew --prefix libvpx)/lib/pkgconfig"
+            export LDFLAGS="-L$(brew --prefix)/lib"
+            export CFLAGS="-I$(brew --prefix)/include"
+          fi
           curl -L https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz | tar -xJ
           cd ffmpeg-8.0.1
           ./configure \
