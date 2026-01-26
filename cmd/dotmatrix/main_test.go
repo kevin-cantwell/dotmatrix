@@ -834,9 +834,11 @@ func TestBrailleOutput_WhiteImage(t *testing.T) {
 }
 
 func TestCLI_Version(t *testing.T) {
+	// Test that the CLI framework correctly outputs version info.
+	// The actual version is injected at build time via ldflags.
 	app := &cli.App{
 		Name:    "dotmatrix",
-		Version: "0.1.0",
+		Version: "test-version",
 	}
 
 	var buf bytes.Buffer
@@ -848,7 +850,7 @@ func TestCLI_Version(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(buf.String(), "0.1.0") {
+	if !strings.Contains(buf.String(), "test-version") {
 		t.Errorf("expected version in output, got: %s", buf.String())
 	}
 }
