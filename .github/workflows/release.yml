@@ -77,7 +77,16 @@ jobs:
           CGO_ENABLED: 1
         run: |
           export PKG_CONFIG_PATH="$HOME/ffmpeg/lib/pkgconfig"
-          export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
+
+          # Add homebrew library paths on macOS for static dependencies
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            BREW_PREFIX=$(brew --prefix)
+            EXTRA_LDFLAGS="-L$BREW_PREFIX/lib -L$(brew --prefix lame)/lib -L$(brew --prefix opus)/lib -L$(brew --prefix libvorbis)/lib -L$(brew --prefix x264)/lib -L$(brew --prefix x265)/lib -L$(brew --prefix libvpx)/lib"
+            export CGO_LDFLAGS="$EXTRA_LDFLAGS $(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
+          else
+            export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
+          fi
+
           export CGO_CFLAGS="$(pkg-config --cflags libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dotmatrix ./cmd/dotmatrix
 
