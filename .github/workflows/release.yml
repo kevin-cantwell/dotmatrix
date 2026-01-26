@@ -11,6 +11,7 @@ permissions:
 jobs:
   release:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
@@ -21,7 +22,7 @@ jobs:
             goos: darwin
             goarch: arm64
             artifact: dotmatrix-darwin-arm64
-          - os: macos-13
+          - os: macos-15
             goos: darwin
             goarch: amd64
             artifact: dotmatrix-darwin-amd64
@@ -45,7 +46,9 @@ jobs:
 
       - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: |
+          brew install ffmpeg@6
+          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg@6)/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Get version from tag
         id: version
