@@ -53,15 +53,22 @@ jobs:
             --disable-shared \
             --disable-programs \
             --disable-doc \
-            --disable-xlib \
-            --disable-libxcb \
-            --disable-sdl2 \
             --disable-network \
             --disable-encoders \
             --disable-muxers \
-            --disable-devices \
-            --enable-indev=avfoundation \
-            --enable-indev=v4l2 \
+            --disable-outdevs \
+            --disable-filters \
+            --enable-filter=scale \
+            --enable-filter=format \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-lzma \
+            --disable-zlib \
+            --disable-bzlib \
+            --disable-iconv \
+            --disable-libxml2 \
+            --disable-securetransport \
             --prefix=$HOME/ffmpeg
           make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
           make install
