@@ -35,43 +35,33 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm yasm pkg-config \
-            libx264-dev libx265-dev libnuma-dev libvpx-dev \
-            libmp3lame-dev libopus-dev libvorbis-dev
+          sudo apt-get install -y nasm yasm pkg-config
 
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install nasm pkg-config x264 x265 libvpx lame opus libvorbis
+          brew install nasm pkg-config
 
-      - name: Build FFmpeg 8.0.1 with static libraries
+      - name: Build FFmpeg 8.0.1 (minimal static)
         run: |
-          # Set up paths for homebrew on macOS
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:$(brew --prefix lame)/lib/pkgconfig:$(brew --prefix opus)/lib/pkgconfig:$(brew --prefix libvorbis)/lib/pkgconfig:$(brew --prefix x264)/lib/pkgconfig:$(brew --prefix x265)/lib/pkgconfig:$(brew --prefix libvpx)/lib/pkgconfig"
-            export LDFLAGS="-L$(brew --prefix)/lib"
-            export CFLAGS="-I$(brew --prefix)/include"
-          fi
           curl -L https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz | tar -xJ
           cd ffmpeg-8.0.1
+          # Build minimal FFmpeg with only built-in codecs (no external libs)
+          # This ensures fully static binary with no runtime dependencies
           ./configure \
-            --enable-gpl \
-            --enable-libx264 \
-            --enable-libx265 \
-            --enable-libvpx \
-            --enable-libmp3lame \
-            --enable-libopus \
-            --enable-libvorbis \
             --enable-static \
             --disable-shared \
+            --disable-programs \
+            --disable-doc \
             --disable-xlib \
             --disable-libxcb \
-            --disable-libxcb-shm \
-            --disable-libxcb-xfixes \
-            --disable-libxcb-shape \
             --disable-sdl2 \
-            --disable-ffplay \
-            --disable-ffprobe \
+            --disable-network \
+            --disable-encoders \
+            --disable-muxers \
+            --disable-devices \
+            --enable-indev=avfoundation \
+            --enable-indev=v4l2 \
             --prefix=$HOME/ffmpeg
           make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
           make install
@@ -85,16 +75,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           export PKG_CONFIG_PATH="$HOME/ffmpeg/lib/pkgconfig"
-
-          # Add homebrew library paths on macOS for static dependencies
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            BREW_PREFIX=$(brew --prefix)
-            EXTRA_LDFLAGS="-L$BREW_PREFIX/lib -L$(brew --prefix lame)/lib -L$(brew --prefix opus)/lib -L$(brew --prefix libvorbis)/lib -L$(brew --prefix x264)/lib -L$(brew --prefix x265)/lib -L$(brew --prefix libvpx)/lib"
-            export CGO_LDFLAGS="$EXTRA_LDFLAGS $(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
-          else
-            export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
-          fi
-
+          export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           export CGO_CFLAGS="$(pkg-config --cflags libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dotmatrix ./cmd/dotmatrix
 
