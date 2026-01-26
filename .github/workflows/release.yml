@@ -31,30 +31,48 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Install FFmpeg 8.0.1 from source (Linux)
+      - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm yasm libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev
+          sudo apt-get install -y nasm yasm pkg-config \
+            libx264-dev libx265-dev libnuma-dev libvpx-dev \
+            libmp3lame-dev libopus-dev libvorbis-dev
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install nasm pkg-config x264 x265 libvpx lame opus libvorbis
+
+      - name: Build FFmpeg 8.0.1 with static libraries
+        run: |
           curl -L https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz | tar -xJ
           cd ffmpeg-8.0.1
-          ./configure --enable-gpl --enable-nonfree --enable-libx264 --enable-libx265 --enable-libvpx --enable-libfdk-aac --enable-libmp3lame --enable-libopus --enable-shared --prefix=/usr/local
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-
-      - name: Install FFmpeg (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg
+          ./configure \
+            --enable-gpl \
+            --enable-libx264 \
+            --enable-libx265 \
+            --enable-libvpx \
+            --enable-libmp3lame \
+            --enable-libopus \
+            --enable-libvorbis \
+            --enable-static \
+            --disable-shared \
+            --prefix=$HOME/ffmpeg
+          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+          make install
 
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Build
+      - name: Build with static FFmpeg
         env:
           CGO_ENABLED: 1
+          PKG_CONFIG_PATH: ${{ github.workspace }}/../ffmpeg/lib/pkgconfig:$HOME/ffmpeg/lib/pkgconfig
         run: |
+          export CGO_LDFLAGS="$(pkg-config --static --libs libavdevice libavformat libavcodec libswscale libswresample libavutil)"
+          export CGO_CFLAGS="$(pkg-config --cflags libavdevice libavformat libavcodec libswscale libswresample libavutil)"
           go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dotmatrix ./cmd/dotmatrix
 
       - name: Ad-hoc code sign (macOS)
