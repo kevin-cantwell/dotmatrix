@@ -25,6 +25,10 @@ import (
 	"github.com/kevin-cantwell/dotmatrix"
 )
 
+// version is set at build time via ldflags:
+// go build -ldflags "-X main.version=1.0.0" ./cmd/dotmatrix
+var version = "dev"
+
 func main() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -36,7 +40,7 @@ func main() {
 	app := &cli.App{
 		Name:            "dotmatrix",
 		Usage:           "Render images and video as Unicode braille art",
-		Version:         "0.2.0",
+		Version:         version,
 		UsageText:       "dotmatrix [options] [file|url]\ncat [file|url] | dotmatrix [options]",
 		HideHelpCommand: true,
 		Flags: []cli.Flag{
