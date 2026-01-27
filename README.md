@@ -19,7 +19,7 @@ Convert images to Unicode braille art for terminal display.
 
 - Encode JPEG, PNG, GIF, and BMP images as braille Unicode characters
 - Animated GIF support with proper frame timing and disposal methods
-- MP4 video playback with H.264 decoding (requires FFmpeg)
+- MP4 video playback with H.264 decoding
 - Embedded subtitle rendering for MP4 files (mov_text format)
 - Native webcam capture on macOS (AVFoundation)
 - Image adjustments: gamma, brightness, contrast, sharpening
@@ -46,21 +46,21 @@ xattr -d com.apple.quarantine dotmatrix
 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
 ```
 
-### Building with MP4 Support
+### Building from Source
 
-MP4 playback requires FFmpeg development libraries and CGO.
+Building from source requires FFmpeg 8.x development libraries and CGO. Pre-built binaries have FFmpeg statically linked and require no runtime dependencies.
 
 **macOS:**
 ```bash
 brew install ffmpeg
-PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig" CGO_ENABLED=1 go build -o dotmatrix ./cmd/dotmatrix
-codesign -s - dotmatrix  # Ad-hoc sign to prevent "Killed: 9" errors
+CGO_ENABLED=1 go build -o dotmatrix ./cmd/dotmatrix
 ```
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
-CGO_ENABLED=1 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
+# FFmpeg 8.x may need to be built from source if not available in repos
+sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libavdevice-dev
+CGO_ENABLED=1 go build -o dotmatrix ./cmd/dotmatrix
 ```
 
 ## Usage
