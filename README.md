@@ -52,7 +52,7 @@ Building from source requires FFmpeg 8.x development libraries and CGO. Pre-buil
 
 **macOS:**
 ```bash
-brew install ffmpeg
+brew install ffmpeg pkg-config
 CGO_ENABLED=1 go build -o dotmatrix ./cmd/dotmatrix
 ```
 
