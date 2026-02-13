@@ -46,6 +46,12 @@ xattr -d com.apple.quarantine dotmatrix
 go install github.com/kevin-cantwell/dotmatrix/cmd/dotmatrix@latest
 ```
 
+**macOS users:** The binary may be killed immediately due to an invalid code signature. If this happens, re-sign it:
+
+```bash
+codesign --force --sign - $(go env GOPATH)/bin/dotmatrix
+```
+
 ### Building from Source
 
 Building from source requires FFmpeg 8.x development libraries and CGO. Pre-built binaries have FFmpeg statically linked and require no runtime dependencies.
