@@ -28,6 +28,12 @@ Convert images to Unicode braille art for terminal display.
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install kevin-cantwell/tap/dotmatrix
+```
+
 ### Pre-built Binaries
 
 Download from [GitHub Releases](https://github.com/kevin-cantwell/dotmatrix/releases). Binaries are available for:
