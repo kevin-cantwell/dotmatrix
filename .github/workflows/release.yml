@@ -144,17 +144,18 @@ jobs:
             license "MIT"
 
             on_macos do
-              if Hardware::CPU.arm?
+              on_arm do
                 url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-darwin-arm64.tar.gz"
                 sha256 "${SHA_DARWIN_ARM64}"
-              else
+              end
+              on_intel do
                 url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-darwin-amd64.tar.gz"
                 sha256 "${SHA_DARWIN_AMD64}"
               end
             end
 
             on_linux do
-              if Hardware::CPU.intel?
+              on_intel do
                 url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-linux-amd64.tar.gz"
                 sha256 "${SHA_LINUX_AMD64}"
               end
