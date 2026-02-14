@@ -98,3 +98,82 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact }}.tar.gz
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v${{ steps.version.outputs.VERSION }} \
+            --repo kevin-cantwell/dotmatrix \
+            --pattern '*.tar.gz' \
+            --dir assets
+
+      - name: Compute SHA256 checksums
+        id: sha
+        run: |
+          echo "DARWIN_ARM64=$(sha256sum assets/dotmatrix-darwin-arm64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "DARWIN_AMD64=$(sha256sum assets/dotmatrix-darwin-amd64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "LINUX_AMD64=$(sha256sum assets/dotmatrix-linux-amd64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: kevin-cantwell/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
+      - name: Update formula
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          SHA_DARWIN_ARM64: ${{ steps.sha.outputs.DARWIN_ARM64 }}
+          SHA_DARWIN_AMD64: ${{ steps.sha.outputs.DARWIN_AMD64 }}
+          SHA_LINUX_AMD64: ${{ steps.sha.outputs.LINUX_AMD64 }}
+        run: |
+          cat > Formula/dotmatrix.rb <<EOF
+          class Dotmatrix < Formula
+            desc "Convert images and videos to Unicode braille art in the terminal"
+            homepage "https://github.com/kevin-cantwell/dotmatrix"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              else
+                url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-darwin-amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/kevin-cantwell/dotmatrix/releases/download/v#{version}/dotmatrix-linux-amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install "dotmatrix"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/dotmatrix --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dotmatrix.rb
+          git commit -m "Update dotmatrix to ${{ steps.version.outputs.VERSION }}"
+          git push
